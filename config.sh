@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
-# Shared configs for HOMER enrichment pipeline
 
-# INPUTS
-# parent directory 
+# inputs
 export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_stride250_full"
 
-# OUTPUTS
-export OUT_ROOT="/nfs/roberts/scratch/pi_cs3222/dh2226/homer_enrich_run"
+# outputs
+export OUT_ROOT="${SCRATCH:-$HOME/scratch}/homer_enrich_run"
 
+# genome
+export HOMER_GENOME="hg38"
+
+# motif finding
+export MOTIF_SIZE="given"
+export MOTIF_LEN="8,10,12"
+export N_MOTIFS=25
+export MASK_REPEATS=1
+export DENOVO=0 
+export PREPARSED_DIR="${OUT_ROOT}/preparsed"
+
+# resources
+export THREADS=8

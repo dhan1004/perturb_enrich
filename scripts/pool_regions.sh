@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env bash
 
 """
 Pool HARI perturbation regions to be foreground/background BEDs for HOMER
 """
+set -euo pipefail
 
 : "${PERTURB_ROOT_SCAN:?set PERTURB_ROOT_SCAN (source config.sh)}"
 : "${OUT_ROOT:?set OUT_ROOT (source config.sh)}"
@@ -17,7 +18,7 @@ merge_bed3() {
 
 # find cell type directories under each gene's results
 mapfile -t CELLS < <(find "${PERTURB_ROOT_SCAN}"/*/results -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort -u)
-if [ "${#CELLS[@]}" -eq 0]; then
+if [ "${#CELLS[@]}" -eq 0 ]; then
     echo "ERROR: no cell types found under ${PERTURB_ROOT_SCAN}/*/results/" >&2
     exit 1
 fi
@@ -37,12 +38,12 @@ MERGED="${POOLED}/bg.merged.bed"
 
 cat "${PERTURB_ROOT_SCAN}"/*/results/tested_space.bed \
     | sort -k1,1 -k2,2n \
-    | awk 'BEGIN{OFS="\t"}{print $1,$2,$3,($4==""?bg":$4,0,".")}' > "${UNMERGED}"
+    | awk 'BEGIN{OFS="\t"}{print $1,$2,$3,($4=="?bg":$4,0,".")}' > "${UNMERGED}"
 
 cat "${PERTURB_ROOT_SCAN}"/*/results/tested_space.bed \
     | cut -f1-3 \
     | merge_bed3 \
-    | awk 'BEGIN{OFS="\t"}{print $1,$2,$3, "bg_"NR,0,".")}' > "${MERGED}"
+    | awk 'BEGIN{OFS="\t"}{print $1,$2,$3, "bg_"NR,0,"."}' > "${MERGED}"
 
 nu=$(wc -l < "${UNMERGED}")
 nm=$(wc -l < "${MERGED}")
