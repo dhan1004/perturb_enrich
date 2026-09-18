@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 
-"""
-Pool HARI perturbation regions to be foreground/background BEDs for HOMER
-"""
+# Pool HARI perturbation regions to be foreground/background BEDs for HOMER
+
 set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${HERE}/../config.sh"
+module load miniconda
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate hari_env
 
 : "${PERTURB_ROOT_SCAN:?set PERTURB_ROOT_SCAN (source config.sh)}"
 : "${OUT_ROOT:?set OUT_ROOT (source config.sh)}"
@@ -38,7 +43,7 @@ MERGED="${POOLED}/bg.merged.bed"
 
 cat "${PERTURB_ROOT_SCAN}"/*/results/tested_space.bed \
     | sort -k1,1 -k2,2n \
-    | awk 'BEGIN{OFS="\t"}{print $1,$2,$3,($4=="?bg":$4,0,".")}' > "${UNMERGED}"
+    | awk 'BEGIN{OFS="\t"}{print $1,$2,$3,($4==""?"bg":$4),0,"."}' > "${UNMERGED}"
 
 cat "${PERTURB_ROOT_SCAN}"/*/results/tested_space.bed \
     | cut -f1-3 \

@@ -7,7 +7,8 @@ export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scDat
 export OUT_ROOT="${SCRATCH:-$HOME/scratch}/homer_enrich_run"
 
 # genome
-export HOMER_GENOME="hg38"
+export GENOME="hg38"
+export HOMER_HOME="/home/dh2226/homer"
 
 # motif finding
 export MOTIF_SIZE="given"

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${HERE}/config.sh"
+source "${HERE}/../config.sh"
+export PATH="${HOMER_HOME}/bin:${PATH}"
 
 : "${OUT_ROOT:?}"
 : "${GENOME:?set GENOME in config.sh (installed HOMER genome e.g. hg38, or /path/to/genome.fa)}"
@@ -27,8 +28,12 @@ for fg in "${FG[@]}"; do
     if [ ! -s "${fg}" ]; then echo "  skip ${cell}: empty foreground"; continue; fi
  
     echo "[2] motifs  : ${cell}"
+    # findMotifsGenome.pl "${fg}" "${GENOME}" "${OUT_ROOT}/motifs/${cell}" \
+    #     -bg "${BG}" -size "${MOTIF_SIZE}" -mask -p "${THREADS}" \
+    #     -preparsedDir "${PREPARSED_DIR}" "${nomotif[@]}"
+
     findMotifsGenome.pl "${fg}" "${GENOME}" "${OUT_ROOT}/motifs/${cell}" \
-        -bg "${BG}" -size "${MOTIF_SIZE}" -mask -p "${THREADS}" \
+        -size "${MOTIF_SIZE}" -mask -p "${THREADS}" \
         -preparsedDir "${PREPARSED_DIR}" "${nomotif[@]}"
  
     echo "[3] annotate: ${cell}"
