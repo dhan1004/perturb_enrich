@@ -42,3 +42,5 @@ for fg in "${FG[@]}"; do
         -annStats "${adir}/annStats.txt" -go "${adir}/go" \
         > "${adir}/annotated.txt" 2> "${adir}/annotatePeaks.log"
 done
+
+echo "annotations complete"
