@@ -4,3 +4,4 @@ gene_list/cell_eqtls/
 gene_list/*.tsv
 gene_list/Ast_eqtl_top_assoc.tsv
 gene_list/*.bed
+annotations/encode_astro
