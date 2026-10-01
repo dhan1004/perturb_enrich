@@ -113,15 +113,15 @@ def main():
                     enh_cols.append(t["name"])
     
     regions["in_promoter_mask"] = mask_total > 0
-    regions["has_enh_call"] = (reg[enh_cols].sum(axis=1) > 0) if enh_cols else False
+    regions["has_enh_call"] = (regions[enh_cols].sum(axis=1) > 0) if enh_cols else False
     distal = (~regions["in_promoter_mask"]) & regions["has_enh_call"]
     regions["is_distal_enh"] = distal
 
     regions.to_csv(out / "annotated.tsv", sep="\t", index=False)
     write_bed6(regions, out / "all_regions.bed")
     write_bed6(regions[regions["is_distal_enh"]], out / "distal_enh.bed")
-    log(f"{a.gene}: {int(reg.is_distal_enh.sum())} distal enhancer regions "
-        f"({int(reg.in_promoter_mask.sum())} in promoter mask)")
+    log(f"{args.gene}: {int(regions.is_distal_enh.sum())} distal enhancer regions "
+        f"({int(regions.in_promoter_mask.sum())} in promoter mask)")
 
 if __name__ == "__main__":
     main()

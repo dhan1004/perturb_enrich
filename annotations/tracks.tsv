@@ -2,4 +2,4 @@ name    path    type    assay   celltype    role
 astro_h3k4me1    /home/dh2226/perturb_enrich/annotations/encode_astro/raw/h3k4me1/ENCFF388GVC.hg38.bed   bed h3k4me1 astrocyte  call
 astro_h3k27ac   /home/dh2226/perturb_enrich/annotations/encode_astro/raw/h3k27ac/ENCFF794VMY.hg38.bed   bed h3k27ac astrocyte   call
 snatac  /home/dh2226/perturb_enrich/annotations/encode_astro/raw/snatac/ENCODE_snATAC_ENCSR986YGY.hg38.bed  bed atac    astrocyte   call
-gencode_tss /home/dh2226/perturb_enrich/annotations/tss.hg38.bed    bed tss astrocyte   mask
+gencode_tss /home/dh2226/perturb_enrich/gene_list/tss_one_base.bed  bed tss astrocyte   mask
