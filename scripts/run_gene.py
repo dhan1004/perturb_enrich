@@ -60,27 +60,23 @@ def main():
     p.add_argument("--force", action="store_true", help="rerun every step")
     p.add_argument("--no-plot", action="store_true")
     p.add_argument("--enrichment", action="store_true", help="also run per-gene findMotifsGenome")
-    a = p.parse_args()
+    args = p.parse_args()
 
-    config = str(Path(a.config).resolve())
-    if not Path(config).exists():
-        sys.exit(f"[run_gene] config not found: {config}")
-    cfg = load_config(config)
+    config = str(Path(args.config).resolve())
+    config = load_config(config)
 
-    gene = a.gene
-    regions = a.regions or cfg.get("REGIONS_FILE") or f"{need(cfg, 'REGIONS_DIR')}/{gene}.tsv"
-    if not Path(regions).exists():
-        sys.exit(f"[run_gene] regions file not found: {regions}")
-    outdir = Path(a.outdir or f"{need(cfg, 'RESULTS_DIR')}/{gene}")
+    gene = args.gene
+    regions = args.regions
+    outdir = args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
 
-    env = {**os.environ, **cfg, "CONFIG": config}
-    if a.enrichment:
+    env = {**os.environ, **config, "CONFIG": config}
+    if args.enrichment:
         env["RUN_ENRICHMENT"] = "1"
     py = sys.executable
 
     def step(name, outputs, cmd):
-        if not a.force and all((outdir / o).exists() for o in outputs):
+        if not args.force and all((outdir / o).exists() for o in outputs):
             print(f"[run_gene] {gene}: {name} - outputs exist, skipping", flush=True)
             return
         t0 = time.time()
@@ -90,13 +86,13 @@ def main():
 
     annotate_cmd = [py, str(HERE / "annotate_regions.py"),
                     "--gene", gene, "--regions", regions, "--outdir", str(outdir),
-                    "--manifest", need(cfg, "TRACKS_MANIFEST"), "--chrom-sizes", need(cfg, "CHROM_SIZES"),
-                    "--tss-pad", cfg.get("TSS_PAD", "2000"), "--celltype", cfg.get("CELLTYPE", "astrocyte"),
-                    "--enh-assays", cfg.get("ENH_ASSAYS", "H3K27ac,ATAC,cCRE")]
-    region_ct = cfg.get("REGION_CELLTYPE", "")
+                    "--tracks", need(config, "TRACKS_MANIFEST"), "--chrom-sizes", need(config, "CHROM_SIZES"),
+                    "--tss-pad", config.get("TSS_PAD", "5000"),
+                    "--enh-assays", config.get("ENH_ASSAYS", "H3K27ac,ATAC")]
+    region_ct = config.get("REGION_CELLTYPE", "")
     if region_ct:
         annotate_cmd += ["--region-celltype", "" if region_ct.lower() == "all" else region_ct]
-    if cfg.get("REQUIRE_INPUT_DISTAL", "0") == "1":
+    if config.get("REQUIRE_INPUT_DISTAL", "0") == "1":
         annotate_cmd.append("--require-input-distal")
     step("annotate", ["annotated.tsv", "all_regions.bed", "distal_enh.bed"], annotate_cmd)
 
@@ -105,13 +101,13 @@ def main():
 
     step("merge", ["final_regions.tsv"],
          [py, str(HERE / "merge_annotations.py"),
-          "--gene", gene, "--outdir", str(outdir), "--target-tss", need(cfg, "TSS_TARGET_BED")])
+          "--gene", gene, "--outdir", str(outdir), "--target-tss", need(config, "TSS_TARGET_BED")])
 
-    if not a.no_plot:
+    if not args.no_plot:
         cmd = [py, str(HERE / "plot_tracks.py"),
-               "--gene", gene, "--manifest", need(cfg, "TRACKS_MANIFEST"), "--outdir", str(outdir),
-               "--gene-track", need(cfg, "GENE_TRACK"), "--celltype", cfg.get("CELLTYPE", "astrocyte")]
-        pattern = cfg.get("PERTURB_TRACK_PATTERN", "")
+               "--gene", gene, "--manifest", need(config, "TRACKS_MANIFEST"), "--outdir", str(outdir),
+               "--gene-track", need(config, "GENE_TRACK"), "--celltype", config.get("CELLTYPE", "astrocyte")]
+        pattern = config.get("PERTURB_TRACK_PATTERN", "")
         if pattern and Path(pattern.format(gene=gene)).exists():
             cmd += ["--perturb-track", pattern.format(gene=gene)]
         step("plot", [f"{gene}.tracks.pdf"], cmd)
