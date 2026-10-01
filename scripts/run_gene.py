@@ -43,7 +43,7 @@ def main():
                    check=True)
 
     print(f"[run_gene] {args.gene}: homer", flush=True)
-    subprocess.run(["bash", str(HERE / "run_homer.sh")], check=True)
+    subprocess.run(["bash", str(HERE / "run_homer.sh"), args.gene, str(outdir)], check=True)
 
     print(f"[run_gene] {args.gene}: merge", flush=True)
     subprocess.run([sys.executable, str(HERE / "merge_annotations.py"),
