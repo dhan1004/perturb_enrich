@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh.
+"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> plot_tracks.py.
 
 usage: python run_gene.py --gene ENSG00000002549 --regions regions.tsv [--config config.sh] [--outdir DIR]
 
-Reads config.sh for TRACKS_MANIFEST, CHROM_SIZES and OUT_ROOT (optional: TSS_PAD, ENH_ASSAYS).
+Reads config.sh for TRACKS_MANIFEST, CHROM_SIZES, TSS_TARGET_BED, GENE_TRACK and OUT_ROOT
+(optional: TSS_PAD, ENH_ASSAYS, CELLTYPE).
 Annotation outputs go to $OUT_ROOT/genes/<gene>/ unless --outdir is given.
 """
 import argparse
@@ -43,6 +44,19 @@ def main():
 
     print(f"[run_gene] {args.gene}: homer", flush=True)
     subprocess.run(["bash", str(HERE / "run_homer.sh")], check=True)
+
+    print(f"[run_gene] {args.gene}: merge", flush=True)
+    subprocess.run([sys.executable, str(HERE / "merge_annotations.py"),
+                    "--gene", args.gene, "--outdir", str(outdir),
+                    "--target-tss", cfg["TSS_TARGET_BED"]],
+                   check=True)
+
+    print(f"[run_gene] {args.gene}: plot", flush=True)
+    subprocess.run([sys.executable, str(HERE / "plot_tracks.py"),
+                    "--gene", args.gene, "--outdir", str(outdir),
+                    "--manifest", cfg["TRACKS_MANIFEST"], "--gene-track", cfg["GENE_TRACK"],
+                    "--celltype", cfg.get("CELLTYPE", "astrocyte")],
+                   check=True)
 
     print(f"[run_gene] {args.gene}: finished", flush=True)
 
