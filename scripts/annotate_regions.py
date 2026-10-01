@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Step 1 (per gene): annotate perturbation regions with BED overlaps and bigwig signal.
+
+Inputs
+  --regions   regions.tsv (header row; may hold many genes / cell types). Required columns:
+              gene_id, chrom, start0, end0. Optional: cell_type, annotation, ... (all kept).
+  --gene      gene_id to process (Ensembl ID; version suffix like .12 is ignored)
+  --manifest  tracks.tsv with columns: name, path, type (bigwig|bed), role (signal|call|mask),
+              assay, celltype
+Outputs (in --outdir)
+  annotated.tsv     one row per region: ALL original regions.tsv columns, then per-track
+                    signal / overlap counts, then in_promoter_mask / has_enh_call / is_distal_enh
+  all_regions.bed   BED6 of every region (region_id in column 4) -> HOMER annotatePeaks
+  distal_enh.bed    BED6 of regions flagged as distal enhancers -> HOMER findMotifsGenome
+
+region_id = <gene_id>|<cell_type>|<chrom>|<start0>|<end0>   (cell_type omitted if absent)
+"""
+import argparse
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import pyBigWig
+import pybedtools
+
+
+def log(msg):
+    print(f"[annotate] {msg}", file=sys.stderr)
+
+def read_regions(path, gene):
+    df = pd.read_csv(path, sep="\t", dtype={"chrom": str, "gene_id": str})
+    if df.empty:
+        sys.exit(f"[annotate] no rows for gene_id {gene} in {path}")
+    df.insert(0, "region_id", df["gene_id"] + "|" + df["chrom"]
+              + "|" + df["start0"].astype(str) + "|" + df["end0"].astype(str))
+    return df.drop_duplicates("region_id").reset_index(drop=True)
+
+def overlap_counts(region, bedtool):
+    """Number of intervals in `bedtool` overlapping each region (keyed on region_id)."""
+    a = pybedtools.BedTool.from_dataframe(region[["chrom", "start0", "end0", "region_id"]])
+    counts = {}
+    for interval in a.intersect(bedtool, c=True):
+        counts[interval.fields[3]] = int(interval.fields[-1])
+    return region["region_id"].map(counts).fillna(0).astype(int)
+
+# def bigwig_signal(reg, path, stat):
+#     bw = pyBigWig.open(str(path))
+#     chroms = bw.chroms()
+#     missing, vals = set(), []
+#     for c, s, e in zip(reg.chrom, reg.start0, reg.end0):
+#         if c not in chroms:
+#             missing.add(c)
+#             vals.append(np.nan)
+#             continue
+#         e2 = min(e, chroms[c])
+#         if e2 <= s:
+#             vals.append(np.nan)
+#             continue
+#         v = bw.stats(c, s, e2, type=stat)[0]
+#         vals.append(np.nan if v is None else v)
+#     bw.close()
+#     if missing:
+#         log(f"WARNING {path}: chromosomes not in bigwig (chr naming mismatch?): {sorted(missing)[:5]}")
+#     return vals
+
+def write_bed6(df, path):
+    out = df[["chrom", "start0", "end0", "region_id", "mean_signed_effect", "gene_strand"]].copy()
+    out.to_csv(path, sep="\t", header=False, index=False)
+
+def add_track_column(reg, name, values):
+    if name in reg.columns:
+        sys.exit(f"[annotate] manifest track name '{name}' collides with a regions.tsv column; rename it")
+    reg[name] = values
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--gene", required=True, help="gene_id (Ensembl)") # should be getting this from directory name
+    p.add_argument("--regions", required=True)
+    p.add_argument("--tracks", required=True)
+    p.add_argument("--outdir", required=True)
+    p.add_argument("--chrom-sizes", required=True, help="hg38 chrom.sizes (for padding the TSS mask)")
+    p.add_argument("--tss-pad", type=int, default=2000)
+    p.add_argument("--celltype", default="astrocyte",
+                   help="manifest filter: keep rows whose celltype is this or 'all' ('' = no filter)")
+    p.add_argument("--region-celltype", default=None,
+                   help="regions.tsv cell_type to keep, case-insensitive (default: same as --celltype; '' = all)")
+    p.add_argument("--require-input-distal", action="store_true",
+                   help="also require annotation == 'distal' and tss_region_overlap_bp == 0 from regions.tsv")
+    p.add_argument("--enh-assays", default="H3K27ac,ATAC",
+                   help="comma-separated assays whose BED calls define an enhancer")
+    p.add_argument("--bw-stat", default="mean", choices=["mean", "max", "min"])
+    args = p.parse_args()
+
+    out = Path(args.outdir)
+    out.mkdir(parents=True, exist_ok=True)
+
+    regions = read_regions(args.regions, args.gene)
+    log(f"{args.gene}: {len(regions)} regions")
+
+    tracks_tsv = pd.read_csv(args.tracks, sep="\t", dtype=str).fillna("")
+    if "role" not in tracks_tsv.columns:
+        tracks_tsv["role"] = ""
+
+    enh_assays = {x.strip() for x in args.enh_assays.split(",") if x.strip()}
+    mask_total = np.zeros(len(regions), dtype=int)
+    n_mask = 0
+    enh_cols = []
+
+    for _, t in tracks_tsv.iterrows():
+        if t["type"] == "bigwig":
+            add_track_column(reg, t["name"], bigwig_signal(reg, t["path"], args.bw_stat))
+        elif t["type"] == "bed":
+            role = t["role"] or "call"
+            if role == "mask":
+                bt = pybedtools.BedTool(t["path"]).slop(b=args.tss_pad, g=args.chrom_sizes)
+                mask_total += overlap_counts(reg, bt).to_numpy()
+                n_mask += 1
+            else:
+                add_track_column(reg, t["name"], overlap_counts(reg, pybedtools.BedTool(t["path"])))
+                if t["assay"] in enh_assays:
+                    enh_cols.append(t["name"])
+        else:
+            sys.exit(f"[annotate] unknown track type '{t['type']}' for {t['name']}")
+
+    if n_mask == 0:
+        sys.exit("[annotate] no role=mask (TSS) track in manifest; cannot define distal regions")
+    if not enh_cols:
+        log("WARNING: no enhancer-call BED tracks matched --enh-assays; no region will be flagged distal")
+
+    reg["in_promoter_mask"] = mask_total > 0
+    reg["has_enh_call"] = (reg[enh_cols].sum(axis=1) > 0) if enh_cols else False
+    distal = (~reg["in_promoter_mask"]) & reg["has_enh_call"]
+
+    if args.require_input_distal:
+        if "annotation" not in reg.columns:
+            sys.exit("[annotate] --require-input-distal needs an 'annotation' column in regions.tsv")
+        ok = reg["annotation"].astype(str).str.lower() == "distal"
+        if "tss_region_overlap_bp" in reg.columns:
+            ok &= pd.to_numeric(reg["tss_region_overlap_bp"], errors="coerce").fillna(0) == 0
+        distal &= ok
+    reg["is_distal_enh"] = distal
+
+    reg.to_csv(out / "annotated.tsv", sep="\t", index=False)
+    write_bed6(reg, out / "all_regions.bed")
+    write_bed6(reg[reg["is_distal_enh"]], out / "distal_enh.bed")
+    log(f"{a.gene}: {int(reg.is_distal_enh.sum())} distal enhancer regions "
+        f"({int(reg.in_promoter_mask.sum())} in promoter mask)")
+
+
+if __name__ == "__main__":
+    main()

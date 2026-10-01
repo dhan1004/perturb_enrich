@@ -4,6 +4,7 @@
 # export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_stride250_full"
 # path to all 1000 ish gene list output
 export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
+export TRACKS_MANIFEST=annotations/tracks.tsv
 
 # outputs
 export OUT_ROOT="${SCRATCH:-$HOME/scratch}/homer_enrich_run"
@@ -22,3 +23,7 @@ export PREPARSED_DIR="${OUT_ROOT}/preparsed"
 
 # resources
 export THREADS=8
+
+# CHROM_SIZES=...hg38.chrom.sizes
+# TSS_TARGET_BED=...        
+# GENE_TRACK=...  

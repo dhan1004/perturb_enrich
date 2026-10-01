@@ -3,7 +3,7 @@
 #SBATCH --partition=day
 #SBATCH --cpus-per-task=2               # MACS3 callpeak is effectively single-threaded
 #SBATCH --mem=64G                       # fragment loading is memory-hungry; lower it after a first run (sacct -j <id> -o MaxRSS)
-#SBATCH --time=08:00:00
+#SBATCH --time=02:00:00
 #SBATCH --output=logs/snatac_peaks_%j.log
 
 # Call pseudobulk peaks from an ENCODE snATAC fragments file.
@@ -33,9 +33,9 @@ fi
 
 module load miniconda
 source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate hari_env
+conda activate macs3_env
 command -v macs3 >/dev/null || { echo "ERROR: macs3 not in hari_env (conda install -c bioconda macs3)" >&2; exit 1; }
-command -v bedtools >/dev/null || { echo "ERROR: bedtools not on PATH" >&2; exit 1; }
+# command -v bedtools >/dev/null || { echo "ERROR: bedtools not on PATH" >&2; exit 1; }
 [ -s "${FRAG}" ] || { echo "ERROR: ${FRAG} missing/empty" >&2; exit 1; }
 
 WORK="${OUT}/${ACC}_work"
@@ -61,15 +61,16 @@ macs3 callpeak -t "${WORK}/fragments.kept.bed" -f BEDPE -g hs -n "${ACC}" \
 echo "[4/4] post-process peaks -> ${OUT}/ENCODE_snATAC_${ACC}.hg38.bed"
 PEAKS="${WORK}/macs3/${ACC}_peaks.narrowPeak"
 FINAL="${OUT}/ENCODE_snATAC_${ACC}.hg38.bed"
-cut -f1-3 "${PEAKS}" \
-  | awk 'BEGIN{OFS="\t"} $1 ~ /^chr([0-9]+|X|Y)$/' \
+# All narrowPeak columns are kept. bedtools merge is skipped because it would collapse the
+# extra columns, and a single MACS3 run already yields non-overlapping peaks.
+awk 'BEGIN{OFS="\t"} $1 ~ /^chr([0-9]+|X|Y)$/' "${PEAKS}" \
   | sort -k1,1 -k2,2n > "${WORK}/peaks.std.bed"
-if [ -n "${BLACKLIST}" ]; then
-  bedtools intersect -v -a "${WORK}/peaks.std.bed" -b "${BLACKLIST}" | bedtools merge -i - > "${FINAL}"
-else
-  bedtools merge -i "${WORK}/peaks.std.bed" > "${FINAL}"
-fi
-echo "  peaks (raw narrowPeak): $(wc -l < "${PEAKS}")   final merged: $(wc -l < "${FINAL}")"
+# if [ -n "${BLACKLIST}" ]; then
+#   bedtools intersect -v -a "${WORK}/peaks.std.bed" -b "${BLACKLIST}" > "${FINAL}"
+# else
+cp "${WORK}/peaks.std.bed" "${FINAL}"
+# fi
+echo "  peaks (raw narrowPeak): $(wc -l < "${PEAKS}")   final: $(wc -l < "${FINAL}")"
 
 # fragments.kept.bed is large and reproducible; delete it once you're happy with the peaks
 echo "done: ${FINAL}"
