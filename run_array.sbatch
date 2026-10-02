@@ -1,40 +1,43 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=perturb_enrich
-#SBATCH --array=1-1000%50            # EDIT: 1-N where N = number of lines in genes.txt; %50 = max concurrent tasks
-#SBATCH --cpus-per-task=4
+#SBATCH --partition=day
+#SBATCH --cpus-per-task=8               # matches THREADS=8 in config.sh (HOMER -p)
 #SBATCH --mem=16G
 #SBATCH --time=04:00:00
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
 #
-# Submit from the project directory (the one holding config.sh and genes.txt):
+# Submit from the repo root (the directory holding config.sh):
 #   mkdir -p logs
-#   sbatch --array=1-$(wc -l < genes.txt)%50 run_array.sbatch
+#   N=$(bash -c 'source config.sh; ls -d "$PERTURB_ROOT_SCAN"/*/results/Astrocyte/regions.tsv | wc -l')
+#   sbatch --array=1-${N}%20 run_array.sbatch
 #
-# Optional environment overrides:
-#   GENES_FILE   file with one gene symbol per line   (default: genes.txt)
-#   CONFIG       path to config.sh                    (default: ./config.sh)
-#   RUNNER       command prefix, e.g. "apptainer exec pipeline.sif"
-#   EXTRA_ARGS   extra run_gene.py flags, e.g. "--enrichment" or "--force"
+# Optional: FORCE=1 to rerun genes that already have final_regions.tsv
 set -euo pipefail
 
 cd "${SLURM_SUBMIT_DIR:?must be run under sbatch}"
-GENES_FILE=${GENES_FILE:-genes.txt}
-CONFIG=${CONFIG:-$PWD/config.sh}
-RUNNER=${RUNNER:-}
-EXTRA_ARGS=${EXTRA_ARGS:-}
-SCRIPT_DIR=${SCRIPT_DIR:-$PWD}        
+source ./config.sh
 
-GENE=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$GENES_FILE" | tr -d '[:space:]')
-[[ -n "$GENE" ]] || { echo "No gene on line ${SLURM_ARRAY_TASK_ID} of $GENES_FILE" >&2; exit 1; }
+module load miniconda
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate perturb
+export PATH="${HOMER_HOME}/bin:${PATH}"
 
-# --- environment: edit for your cluster ---
-# module load bedtools homer
-# source activate perturb_enrich
+CELLTYPE_DIR=Astrocyte
 
-echo "[$(date '+%F %T')] task ${SLURM_ARRAY_TASK_ID}: $GENE on $(hostname)"
+# Same sorted list in every task, so array index N always maps to the same gene
+mapfile -t REGION_FILES < <(ls -d "${PERTURB_ROOT_SCAN}"/*/results/${CELLTYPE_DIR}/regions.tsv | sort)
+REGIONS="${REGION_FILES[$((SLURM_ARRAY_TASK_ID - 1))]:-}"
+[[ -n "$REGIONS" ]] || { echo "No gene for array index ${SLURM_ARRAY_TASK_ID}" >&2; exit 1; }
 
-# shellcheck disable=SC2086
-$RUNNER python3 "$SCRIPT_DIR/run_gene.py" --gene "$GENE" --config "$CONFIG" $EXTRA_ARGS
+# <root>/<gene_id>/results/Astrocyte/regions.tsv -> <gene_id>
+GENE=$(basename "$(dirname "$(dirname "$(dirname "$REGIONS")")")")
 
-echo "[$(date '+%F %T')] task ${SLURM_ARRAY_TASK_ID}: $GENE finished"
+if [[ -s "${OUT_ROOT}/genes/${GENE}/final_regions.tsv" && "${FORCE:-0}" != "1" ]]; then
+    echo "[$(date '+%F %T')] ${GENE}: already done, skipping (FORCE=1 to rerun)"
+    exit 0
+fi
+
+echo "[$(date '+%F %T')] task ${SLURM_ARRAY_TASK_ID}: ${GENE} on $(hostname)"
+python scripts/run_gene.py --gene "$GENE" --regions "$REGIONS" --config "$PWD/config.sh"
+echo "[$(date '+%F %T')] task ${SLURM_ARRAY_TASK_ID}: ${GENE} finished"

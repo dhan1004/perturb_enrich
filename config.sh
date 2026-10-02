@@ -9,7 +9,7 @@ export TRACKS_MANIFEST="/home/dh2226/perturb_enrich/annotations/tracks.tsv"
 export CHROM_SIZES="/home/dh2226/hg38.chrom.sizes"
 
 # outputs
-export OUT_ROOT="/home/dh2226/scratch_pi_cs3222/dh2226/homer_enrich_run"
+export OUT_ROOT="/home/dh2226/scratch_pi_cs3222/dh2226/20261001"
 
 # genome
 export GENOME="hg38"
