@@ -34,6 +34,7 @@ def add_target_tss_distance(df, tss_path, gene):
         return df
     mids = (df["start0"] + df["end0"]) // 2
     best = []
+    t = t[t[3] == gene.split(".")[0]]
     for chrom, mid in zip(df["chrom"], mids):
         cand = t[t[0] == chrom]
         if cand.empty:

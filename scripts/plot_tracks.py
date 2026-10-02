@@ -56,7 +56,7 @@ def main():
     all_bed, distal_bed = out / "all_regions.bed", out / "distal_enh.bed"
     chrom, start, end = window(all_bed, a.flank)
 
-    man = pd.read_csv(a.manifest, sep="\t", comment="#", dtype=str).fillna("")
+    man = pd.read_csv(a.manifest, sep=r"\s+", comment="#", dtype=str).fillna("")
     if "role" not in man.columns:
         man["role"] = ""
     if a.celltype and "celltype" in man.columns:

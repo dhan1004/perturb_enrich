@@ -21,8 +21,9 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pyBigWig
+# import pyBigWig
 import pybedtools
+
 
 
 def log(msg):
@@ -81,7 +82,7 @@ def main():
     p.add_argument("--outdir", required=True)
     p.add_argument("--chrom-sizes", required=True, help="hg38 chrom.sizes (for padding the TSS mask)")
     p.add_argument("--tss-pad", type=int, default=5000)
-    p.add_argument("--enh-assays", default="H3K27ac,ATAC",
+    p.add_argument("--enh-assays", default="h3k27ac,atac",
                    help="comma-separated assays whose BED calls define an enhancer")
     p.add_argument("--bw-stat", default="mean", choices=["mean", "max", "min"])
     args = p.parse_args()
@@ -92,7 +93,7 @@ def main():
     regions = read_regions(args.regions, args.gene)
     log(f"{args.gene}: {len(regions)} regions")
 
-    tracks_tsv = pd.read_csv(args.tracks, sep="\t", dtype=str).fillna("")
+    tracks_tsv = pd.read_csv(args.tracks, sep=r"\s+", dtype=str).fillna("")
 
     enh_assays = {x.strip() for x in args.enh_assays.split(",") if x.strip()}
     mask_total = np.zeros(len(regions), dtype=int)
