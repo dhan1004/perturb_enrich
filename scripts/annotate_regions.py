@@ -45,25 +45,25 @@ def overlap_counts(region, bedtool):
         counts[interval.fields[3]] = int(interval.fields[-1])
     return region["region_id"].map(counts).fillna(0).astype(int)
 
-# def bigwig_signal(reg, path, stat):
-#     bw = pyBigWig.open(str(path))
-#     chroms = bw.chroms()
-#     missing, vals = set(), []
-#     for c, s, e in zip(reg.chrom, reg.start0, reg.end0):
-#         if c not in chroms:
-#             missing.add(c)
-#             vals.append(np.nan)
-#             continue
-#         e2 = min(e, chroms[c])
-#         if e2 <= s:
-#             vals.append(np.nan)
-#             continue
-#         v = bw.stats(c, s, e2, type=stat)[0]
-#         vals.append(np.nan if v is None else v)
-#     bw.close()
-#     if missing:
-#         log(f"WARNING {path}: chromosomes not in bigwig (chr naming mismatch?): {sorted(missing)[:5]}")
-#     return vals
+def bigwig_signal(reg, path, stat):
+    bw = pyBigWig.open(str(path))
+    chroms = bw.chroms()
+    missing, vals = set(), []
+    for c, s, e in zip(reg.chrom, reg.start0, reg.end0):
+        if c not in chroms:
+            missing.add(c)
+            vals.append(np.nan)
+            continue
+        e2 = min(e, chroms[c])
+        if e2 <= s:
+            vals.append(np.nan)
+            continue
+        v = bw.stats(c, s, e2, type=stat)[0]
+        vals.append(np.nan if v is None else v)
+    bw.close()
+    if missing:
+        log(f"WARNING {path}: chromosomes not in bigwig (chr naming mismatch?): {sorted(missing)[:5]}")
+    return vals
 
 def write_bed6(df, path):
     out = df[["chrom", "start0", "end0", "region_id", "mean_signed_effect", "gene_strand"]].copy()
@@ -101,8 +101,7 @@ def main():
 
     for _, t in tracks_tsv.iterrows():
         if t["type"] == "bigwig":
-            # add_track_column(reg, t["name"], bigwig_signal(reg, t["path"], args.bw_stat))
-            pass
+            add_track_column(reg, t["name"], bigwig_signal(reg, t["path"], args.bw_stat))
         elif t["type"] == "bed":
             role = t["role"]
             if role == "mask":
