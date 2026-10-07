@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> plot_tracks.py.
+"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> enrich_gene.py -> plot_tracks.py.
 
 usage: python run_gene.py --gene ENSG00000002549 --regions regions.tsv [--config config.sh] [--outdir DIR]
 
-Reads config.sh for TRACKS_MANIFEST, CHROM_SIZES, TSS_TARGET_BED, GENE_TRACK and OUT_ROOT
-(optional: TSS_PAD, ENH_ASSAYS, CELLTYPE).
+Reads config.sh for TRACKS_MANIFEST, CHROM_SIZES, TSS_TARGET_BED, GENE_TRACK, THRESHOLDS_TSV and OUT_ROOT
+(optional: TSS_PAD, ENH_ASSAYS, CELLTYPE, ENRICH_NPERM, ENRICH_STRATA, ENRICH_EXCLUDE_PERTURBED).
 Annotation outputs go to $OUT_ROOT/genes/<gene>/ unless --outdir is given.
 """
 import argparse
@@ -50,6 +50,18 @@ def main():
                     "--gene", args.gene, "--outdir", str(outdir),
                     "--target-tss", config["TSS_TARGET_BED"]],
                    check=True)
+
+    print(f"[run_gene] {args.gene}: enrich", flush=True)
+    enrich_cmd = [sys.executable, str(HERE / "enrich_gene.py"),
+                  "--gene", args.gene, "--regions", args.regions,
+                  "--tested", str(Path(args.regions).with_name("tested_regions.tsv")),
+                  "--outdir", str(outdir),
+                  "--tracks", config["TRACKS_MANIFEST"], "--thresholds", config["THRESHOLDS_TSV"],
+                  "--nperm", config.get("ENRICH_NPERM", "1000"),
+                  "--strata", config.get("ENRICH_STRATA", "direction annotation is_distal_enh")]
+    if config.get("ENRICH_EXCLUDE_PERTURBED", "0") == "1":
+        enrich_cmd.append("--exclude-perturbed")
+    subprocess.run(enrich_cmd, check=True)
 
     print(f"[run_gene] {args.gene}: plot", flush=True)
     subprocess.run([sys.executable, str(HERE / "plot_tracks.py"),
