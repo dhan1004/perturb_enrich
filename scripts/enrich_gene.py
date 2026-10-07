@@ -227,7 +227,8 @@ def main():
         strata_names=np.array(names), n=np.array([int(m.sum()) for m in masks]),
         obs_set=obs_set, obs_file=obs_file, obs_joint=obs_joint,
         null_set=null_set, null_file=null_file, null_joint=null_joint)
-    log(f"{a.gene}: {n} regions, {S} sets ({', '.join(f'{s['set']}:{s['source']}' for s in sets)})")
+    set_desc = ", ".join(s["set"] + ":" + s["source"] for s in sets)
+    log(f"{a.gene}: {n} regions, {S} sets ({set_desc})")
 
 
 if __name__ == "__main__":
