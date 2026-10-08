@@ -191,6 +191,8 @@ def main():
     p.add_argument("--celltype", default="astrocyte")
     p.add_argument("--tick-step", type=int, default=0, help="ruler tick spacing in bp (default: auto, ~8 ticks)")
     p.add_argument("--flank", type=int, default=20000)
+    p.add_argument("--show-peaks", action="store_true",
+               help="also plot manifest peak/cCRE BEDs (default: bigwigs only)")
     a = p.parse_args()
 
     out = Path(a.outdir)
@@ -219,8 +221,8 @@ def main():
     if "role" not in man_all.columns:
         man_all["role"] = ""
     man = man_all
-    if a.celltype and "celltype" in man.columns:
-        man = man[man["celltype"].isin([a.celltype, "all", ""])]
+    # if a.celltype and "celltype" in man.columns:
+    #     man = man[man["celltype"].isin([a.celltype, "all", ""])]
 
     blocks, i = [], 0
 
@@ -247,10 +249,12 @@ def main():
         blocks.append(f"[perturbation]\nfile = {a.perturb_track}\ntitle = perturbation effect\n"
                       f"height = {H_EFFECT}\ncolor = #000000\n")
     for _, t in man[man["type"] == "bigwig"].iterrows():
-        blocks.append(f"[{t['name']}]\nfile = {t['path']}\ntitle = {t['name']}\nheight = {H_BIGWIG}\n"
-                      f"color = {color()}\nmin_value = 0\n")
-    for _, t in man[(man["type"] == "bed") & (man["role"] != "mask")].iterrows():
-        blocks.append(bed_block(t["name"], t["path"], color()))
+        blocks.append(f"[{t['name']}]\nfile = {t['path']}\nfile_type = bigwig\ntitle = {t['name']}\n"
+            f"height = {H_BIGWIG}\ncolor = {color()}\nmin_value = 0\n")
+    if a.show_peaks:
+        for _, t in man[(man["type"] == "bed") & (man["role"] != "mask")].iterrows():
+            blocks.append(bed_block(t["name"], t["path"], color()))
+        
     # blocks.append(bed_block("perturbed regions", all_bed, "#999999"))
     blocks.append(bed_block("distal enhancers", distal_bed, "#000000"))
 

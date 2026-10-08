@@ -3,7 +3,7 @@
 #SBATCH --partition=day
 #SBATCH --cpus-per-task=8               # matches THREADS=8 in config.sh (HOMER -p)
 #SBATCH --mem=16G
-#SBATCH --time=04:00:00
+#SBATCH --time=01:00:00
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
 #

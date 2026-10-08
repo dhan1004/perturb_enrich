@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-# import pyBigWig
+import pyBigWig
 import pybedtools
 
 
@@ -101,7 +101,7 @@ def main():
 
     for _, t in tracks_tsv.iterrows():
         if t["type"] == "bigwig":
-            add_track_column(reg, t["name"], bigwig_signal(reg, t["path"], args.bw_stat))
+            add_track_column(regions, t["name"], bigwig_signal(regions, t["path"], args.bw_stat))
         elif t["type"] == "bed":
             role = t["role"]
             if role == "mask":
