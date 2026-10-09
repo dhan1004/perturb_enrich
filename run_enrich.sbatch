@@ -29,6 +29,6 @@ GENE=$(basename "$(dirname "$(dirname "$(dirname "$REGIONS")")")")
 ARGS=()
 [[ "${ENRICH_EXCLUDE_PERTURBED:-0}" == "1" ]] && ARGS+=(--exclude-perturbed)
 python scripts/enrich_gene.py --gene "$GENE" --regions "$REGIONS" \
-    --tested "${PERTURB_ROOT_SCAN}/${GENE}/tested_space.bed" --outdir "${OUT_ROOT}/genes/${GENE}" \
+    --tested "$(dirname "$(dirname "$REGIONS")")/tested_space.bed" --outdir "${OUT_ROOT}/genes/${GENE}" \
     --tracks "$TRACKS_MANIFEST" --thresholds "$THRESHOLDS_TSV" \
     --nperm "$ENRICH_NPERM" --strata "$ENRICH_STRATA" "${ARGS[@]}"

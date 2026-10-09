@@ -9,7 +9,7 @@ calibrate_thresholds.py), otherwise its BED rows. A region scores 1 for a set if
 >= 1 active bp / peak in ANY of the set's files, else 0. Each perturbed region is one block.
 
 Null: each region is re-placed --nperm times at a uniformly random position inside THIS gene's
-tested windows (<gene dir>/tested_space.bed from scan_hari.py), same length, and re-scored.  --exclude-perturbed restricts
+tested windows (<gene>/results/tested_space.bed from scan_hari.py), same length, and re-scored.  --exclude-perturbed restricts
 the draw to tested sequence not covered by perturbed regions.
 
 Outputs in --outdir (default $OUT_ROOT/genes/<gene>):
@@ -116,9 +116,9 @@ def main():
     ap.add_argument("--gene", required=True)
     ap.add_argument("--regions", required=True, help="regions.tsv for this gene")
     ap.add_argument("--tested", default="",
-                    help="tested windows: <gene dir>/tested_space.bed (headerless chrom,start0,end0,gene_id) "
+                    help="tested windows: <gene>/results/tested_space.bed (headerless chrom,start0,end0,gene_id) "
                          "or a TSV with header gene_id,chrom,start0,end0 "
-                         "(default: tested_space.bed two levels above --regions' directory)")
+                         "(default: tested_space.bed one level above --regions' directory)")
     ap.add_argument("--tracks", required=True, help="tracks.tsv manifest")
     ap.add_argument("--thresholds", required=True, help="thresholds.tsv from calibrate_thresholds.py")
     ap.add_argument("--outdir", required=True)
@@ -131,8 +131,8 @@ def main():
 
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    # regions.tsv lives at <gene>/results/<CellType>/regions.tsv; tested_space.bed at <gene>/
-    tested_path = Path(a.tested) if a.tested else Path(a.regions).resolve().parents[2] / "tested_space.bed"
+    # regions.tsv lives at <gene>/results/<CellType>/regions.tsv; tested_space.bed at <gene>/results/
+    tested_path = Path(a.tested) if a.tested else Path(a.regions).resolve().parents[1] / "tested_space.bed"
     if not tested_path.exists():
         sys.exit(f"[enrich] tested windows not found: {tested_path} (pass --tested)")
 
