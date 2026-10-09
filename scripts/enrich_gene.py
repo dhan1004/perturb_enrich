@@ -9,7 +9,7 @@ calibrate_thresholds.py), otherwise its BED rows. A region scores 1 for a set if
 >= 1 active bp / peak in ANY of the set's files, else 0. Each perturbed region is one block.
 
 Null: each region is re-placed --nperm times at a uniformly random position inside THIS gene's
-tested windows (tested_regions.tsv), same length, and re-scored.  --exclude-perturbed restricts
+tested windows (<gene dir>/tested_space.bed from scan_hari.py), same length, and re-scored.  --exclude-perturbed restricts
 the draw to tested sequence not covered by perturbed regions.
 
 Outputs in --outdir (default $OUT_ROOT/genes/<gene>):
@@ -40,6 +40,21 @@ def read_regions(path):
               + df["start0"].astype(str) + "|" + df["end0"].astype(str))
     df = df.drop_duplicates("region_id").reset_index(drop=True)
     df["length"] = df["end0"] - df["start0"]
+    return df
+
+
+def read_tested(path):
+    """tested_space.bed (headerless: chrom, start0, end0, gene_id) or a headered TSV."""
+    path = Path(path)
+    if path.suffix == ".bed":
+        df = pd.read_csv(path, sep="\t", header=None, usecols=[0, 1, 2, 3],
+                         names=["chrom", "start0", "end0", "gene_id"],
+                         dtype={"chrom": str, "gene_id": str}, comment="#")
+    else:
+        df = pd.read_csv(path, sep="\t", usecols=["gene_id", "chrom", "start0", "end0"],
+                         dtype={"chrom": str, "gene_id": str})
+    if df.empty:
+        sys.exit(f"[enrich] no tested windows in {path}")
     return df
 
 
@@ -100,7 +115,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--gene", required=True)
     ap.add_argument("--regions", required=True, help="regions.tsv for this gene")
-    ap.add_argument("--tested", default="", help="tested_regions.tsv (default: next to --regions)")
+    ap.add_argument("--tested", default="",
+                    help="tested windows: <gene dir>/tested_space.bed (headerless chrom,start0,end0,gene_id) "
+                         "or a TSV with header gene_id,chrom,start0,end0 "
+                         "(default: tested_space.bed two levels above --regions' directory)")
     ap.add_argument("--tracks", required=True, help="tracks.tsv manifest")
     ap.add_argument("--thresholds", required=True, help="thresholds.tsv from calibrate_thresholds.py")
     ap.add_argument("--outdir", required=True)
@@ -113,13 +131,13 @@ def main():
 
     out = Path(a.outdir)
     out.mkdir(parents=True, exist_ok=True)
-    tested_path = Path(a.tested) if a.tested else Path(a.regions).with_name("tested_regions.tsv")
+    # regions.tsv lives at <gene>/results/<CellType>/regions.tsv; tested_space.bed at <gene>/
+    tested_path = Path(a.tested) if a.tested else Path(a.regions).resolve().parents[2] / "tested_space.bed"
     if not tested_path.exists():
         sys.exit(f"[enrich] tested windows not found: {tested_path} (pass --tested)")
 
     regions = read_regions(a.regions)
-    tested = pd.read_csv(tested_path, sep="\t", usecols=["gene_id", "chrom", "start0", "end0"],
-                         dtype={"chrom": str, "gene_id": str})
+    tested = read_tested(tested_path)
 
     # extra columns produced by stage 1 (is_distal_enh etc.) for stratification
     ann = out / "annotated.tsv"

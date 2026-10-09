@@ -54,7 +54,7 @@ def main():
     print(f"[run_gene] {args.gene}: enrich", flush=True)
     enrich_cmd = [sys.executable, str(HERE / "enrich_gene.py"),
                   "--gene", args.gene, "--regions", args.regions,
-                  "--tested", str(Path(args.regions).with_name("regions.tsv")),
+                  "--tested", str(Path(args.regions).resolve().parents[2] / "tested_space.bed"),
                   "--outdir", str(outdir),
                   "--tracks", config["TRACKS_MANIFEST"], "--thresholds", config["THRESHOLDS_TSV"],
                   "--nperm", config.get("ENRICH_NPERM", "1000"),
