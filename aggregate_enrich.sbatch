@@ -10,7 +10,7 @@
 # Pool per-gene counts -> $OUT_ROOT/enrichment/*.tsv. Run once after all genes finished
 # (sbatch --dependency=afterok:<array_jobid> aggregate_enrich.sbatch).
 set -euo pipefail
-cd "${SLURM_SUBMIT_DIR:?must be run under sbatch}"
+cd "${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 source ./config.sh
 module load miniconda
 source "$(conda info --base)/etc/profile.d/conda.sh"

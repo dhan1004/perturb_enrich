@@ -27,7 +27,7 @@ export TSS_TARGET_BED="/home/dh2226/perturb_enrich/gene_list/tss_one_base.bed"
 export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz" 
 
 # concordance / enrichment
-export ENRICH_QVALUE=005      # BH q cutoff used to call a bigwig bp "active" (p-value tracks)
+export ENRICH_QVALUE=0.05      # BH q cutoff used to call a bigwig bp "active" (p-value tracks)
 export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds_q${ENRICH_QVALUE/./}.tsv"
 export ENRICH_NPERM=1000
 export ENRICH_STRATA="direction annotation is_distal_enh"
