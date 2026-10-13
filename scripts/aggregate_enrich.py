@@ -9,8 +9,14 @@ Outputs in --outdir (default <out-root>/enrichment):
     enrichment_by_set.tsv     observed vs null overlap fraction per annotation set and stratum
     enrichment_by_file.tsv    same per file (bigwig/bed) within sets
     set_pairwise.tsv          co-occurrence of two sets (observed joint overlap vs null joint)
-    region_concordance.tsv    every perturbed region with its 0/1 values (all genes)
+    region_concordance.tsv    every perturbed region with its 0/1 values and covered bp (all genes)
     per_gene_counts.tsv       per-gene region counts and set overlap counts
+  Base-pair coverage (needs enrich_counts.npz written by the coverage-aware enrich_gene.py):
+    enrichment_cov_by_set.tsv fraction of perturbed bp covered by active signal vs the permutation
+                              null and vs the tested-territory background, per set and stratum
+    cov_pairwise.tsv          does set A show more enrichment than set B? (paired permutation test
+                              on the difference in enrichment; same placements for every set)
+    per_gene_coverage.tsv     the same enrichment per gene (stratum 'all') for gene-level tests
 """
 import argparse
 import sys
@@ -20,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from enrich_lib import bh, enrich_rows, pairwise_rows  # noqa: E402
+from enrich_lib import bh, cov_pairwise_rows, cov_rows, enrich_rows, pairwise_rows  # noqa: E402
 
 
 def main():
@@ -67,7 +73,18 @@ def main():
     null_set = np.zeros((P, K, S), dtype=np.int64)
     null_file = np.zeros((P, K, F), dtype=np.int64)
     null_joint = np.zeros((P, K, S, S), dtype=np.int64)
-    per_gene = []
+    missing_cov = [str(d["gene"]) for d in data if "obs_cov" not in d.files]
+    has_cov = not missing_cov
+    if not has_cov:
+        print(f"[aggregate] {len(missing_cov)} gene(s) lack coverage counts (enrich_counts.npz predates "
+              f"the coverage statistic, e.g. {missing_cov[:3]}); rerun run_enrich.sbatch to get "
+              "enrichment_cov_by_set.tsv / cov_pairwise.tsv / per_gene_coverage.tsv", file=sys.stderr)
+    obs_cov = np.zeros((K, S), dtype=np.int64)
+    obs_len = np.zeros(K, dtype=np.int64)
+    null_cov = np.zeros((P, K, S), dtype=np.int64)
+    bg_cov = np.zeros(S, dtype=np.int64)
+    bg_len = 0
+    per_gene, per_gene_cov = [], []
     for d in data:
         for j, nm in enumerate(d["strata_names"]):
             k = kidx[nm]
@@ -79,18 +96,38 @@ def main():
             null_set[:, k] += d["null_set"][:, j]
             null_file[:, k] += d["null_file"][:, j]
             null_joint[:, k] += d["null_joint"][:, j]
+            if has_cov:
+                obs_cov[k] += d["obs_cov"][j]
+                obs_len[k] += d["obs_len"][j]
+                null_cov[:, k] += d["null_cov"][:, j]
         j0 = list(d["strata_names"]).index("all")
         row = {"gene_id": str(d["gene"]), "n_regions": int(d["n"][j0])}
         row.update({f"n_{s}": int(v) for s, v in zip(sets, d["obs_set"][j0])})
         per_gene.append(row)
+        if has_cov:
+            bg_cov += d["bg_cov"]
+            bg_len += int(d["bg_len"])
+            if d["obs_len"][j0] > 0 and int(d["bg_len"]) > 0:
+                g = cov_rows("all", int(d["n"][j0]), int(d["obs_len"][j0]), sets, d["obs_cov"][j0],
+                             d["null_cov"][:, j0, :], d["bg_cov"] / int(d["bg_len"]))
+                g.insert(0, "gene_id", str(d["gene"]))
+                per_gene_cov.append(g)
     pd.DataFrame(per_gene).to_csv(outdir / "per_gene_counts.tsv", sep="\t", index=False)
 
     meta = pd.DataFrame(dict(annotation=sets, source=list(ref["set_source"]),
                              assay=list(ref["set_assay"]), celltype=list(ref["set_celltype"])))
     tabS, tabF, tabP = [], [], []
+    tabC, tabCP = [], []
+    bg_frac = bg_cov / bg_len if (has_cov and bg_len > 0) else np.full(S, np.nan)
     for k, nm in enumerate(names):
         if n[k] < a.min_n:
             continue
+        if has_cov and obs_len[k] > 0:
+            t = cov_rows(nm, int(n[k]), int(obs_len[k]), sets, obs_cov[k], null_cov[:, k, :], bg_frac)
+            t.insert(3, "n_genes", int(n_genes[k]))
+            tabC.append(t.merge(meta, on="annotation", how="left"))
+            tabCP.append(cov_pairwise_rows(nm, int(n[k]), int(obs_len[k]), sets,
+                                           obs_cov[k], null_cov[:, k, :]))
         t = enrich_rows(nm, int(n[k]), sets, obs_set[k], null_set[:, k, :])
         t.insert(3, "n_genes", int(n_genes[k]))
         tabS.append(t.merge(meta, on="annotation", how="left"))
@@ -106,8 +143,15 @@ def main():
         if nm == "set_pairwise":
             df["q_enrich"] = bh(df.p_enrich.values)
         df.to_csv(outdir / f"{nm}.tsv", sep="\t", index=False)
+    if has_cov:
+        for nm, tabs in (("enrichment_cov_by_set", tabC), ("cov_pairwise", tabCP),
+                         ("per_gene_coverage", per_gene_cov)):
+            if not tabs:
+                print(f"[aggregate] nothing to write for {nm}.tsv", file=sys.stderr)
+                continue
+            pd.concat(tabs, ignore_index=True).to_csv(outdir / f"{nm}.tsv", sep="\t", index=False)
 
-    regs = [pd.read_csv(p.with_name("enrich_regions.tsv"), sep="\t", dtype={"chrom": str})
+    regs =[pd.read_csv(p.with_name("enrich_regions.tsv"), sep="\t", dtype={"chrom": str})
             for p in paths if p.with_name("enrich_regions.tsv").exists()]
     if regs:
         pd.concat(regs, ignore_index=True).to_csv(outdir / "region_concordance.tsv", sep="\t", index=False)

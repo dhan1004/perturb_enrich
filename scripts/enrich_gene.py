@@ -12,9 +12,17 @@ Null: each region is re-placed --nperm times at a uniformly random position insi
 tested windows (<gene>/results/tested_space.bed from scan_hari.py), same length, and re-scored.  --exclude-perturbed restricts
 the draw to tested sequence not covered by perturbed regions.
 
+Besides the binary score, each region also gets a continuous one per set: the number of its bp
+covered by the set's active intervals (the union over the set's files), scored for the observed
+region and for every permuted placement. The tested territory's own active fraction (the
+background level) is stored alongside. Region lengths are identical in observed and null, so
+pooled coverage fractions are covered bp / perturbed bp.
+
 Outputs in --outdir (default $OUT_ROOT/genes/<gene>):
-    enrich_regions.tsv   region_id + 0/1 per file and per set (+ strata columns)
-    enrich_counts.npz    observed and null overlap counts per stratum (input to aggregation)
+    enrich_regions.tsv   region_id + 0/1 per file and per set, covered bp per set (+ strata columns)
+    enrich_counts.npz    observed and null overlap counts per stratum, plus covered-bp totals
+                         (obs_cov, null_cov, obs_len) and background (bg_cov, bg_len)
+                         (input to aggregation)
 """
 import argparse
 import sys
@@ -26,8 +34,8 @@ import pandas as pd
 import pyBigWig
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from enrich_lib import (G, build_sampler, choose_sources, merge, norm_path,  # noqa: E402
-                        overlaps, read_manifest, resolve_chrom)
+from enrich_lib import (G, build_sampler, choose_sources, coverage, merge,  # noqa: E402
+                        norm_path, overlaps, read_manifest, resolve_chrom, subtract)
 
 
 def log(msg):
@@ -173,6 +181,18 @@ def main():
     set_names = [s["set"] for s in sets]
     F, S = len(file_names), len(sets)
     set_files = [np.flatnonzero(file_set == k) for k in range(S)]
+    # union of a set's active intervals over its files: coverage is bp covered by ANY file
+    set_union = []
+    for idx in set_files:
+        us = np.concatenate([peaks[j][0] for j in idx]) if len(idx) else np.array([], dtype=np.int64)
+        ue = np.concatenate([peaks[j][1] for j in idx]) if len(idx) else np.array([], dtype=np.int64)
+        set_union.append(merge(us, ue))
+
+    def cover(qs, qe):
+        C = np.zeros((len(qs), S), dtype=np.int32)
+        for k, (ps, pe) in enumerate(set_union):
+            C[:, k] = coverage(qs, qe, ps, pe)
+        return C
 
     def binarize(qs, qe):
         X = np.zeros((len(qs), F), dtype=bool)
@@ -209,16 +229,25 @@ def main():
     null_set = np.zeros((P, K, S), dtype=np.int32)
     null_file = np.zeros((P, K, F), dtype=np.int32)
     null_joint = np.zeros((P, K, S, S), dtype=np.int32)
+    # continuous (bp coverage) counterparts; bp totals are exact in int64
+    obs_cov = np.zeros((K, S), dtype=np.int64)
+    obs_len = np.zeros(K, dtype=np.int64)
+    null_cov = np.zeros((P, K, S), dtype=np.int64)
+    bg_cov = np.zeros(S, dtype=np.int64)   # active bp inside the tested territory (null draw area)
+    bg_len = 0
 
     if n:
         cid = regions.chrom.map(chrom_id).values.astype(np.int64)
         L = regions.length.values.astype(np.int64)
         Xf, Xs = binarize(cid * G + regions.start0.values, cid * G + regions.end0.values)
+        Cx = cover(cid * G + regions.start0.values, cid * G + regions.end0.values)
 
         rng = np.random.default_rng([a.seed, zlib.crc32(a.gene.encode())])
         starts = sample(rng, P).ravel()
-        Nf, Ns = binarize(starts, starts + np.tile(L, P))
+        qe_null = starts + np.tile(L, P)
+        Nf, Ns = binarize(starts, qe_null)
         Nf, Ns = Nf.reshape(P, n, F), Ns.reshape(P, n, S)
+        Nc = cover(starts, qe_null).reshape(P, n, S)
 
         for k, m in enumerate(masks):
             x = Xs[m].astype(np.int32)
@@ -228,6 +257,17 @@ def main():
             null_set[:, k] = xn.sum(1)
             null_file[:, k] = Nf[:, m, :].sum(1)
             null_joint[:, k] = np.einsum("pns,pnt->pst", xn, xn)
+            obs_cov[k], obs_len[k] = Cx[m].sum(0, dtype=np.int64), L[m].sum()
+            null_cov[:, k] = Nc[:, m, :].sum(1, dtype=np.int64)
+
+        # background: active fraction of the territory the null is drawn from
+        tc = tested.chrom.map(chrom_id).values.astype(np.int64)
+        bs, be = merge(tc * G + tested.start0.values, tc * G + tested.end0.values)
+        if a.exclude_perturbed:
+            rs, re_ = merge(cid * G + regions.start0.values, cid * G + regions.end0.values)
+            bs, be = subtract(bs, be, rs, re_)
+        bg_len = int((be - bs).sum())
+        bg_cov = np.array([coverage(bs, be, ps, pe).sum() for ps, pe in set_union], dtype=np.int64)
 
         tab = regions[["region_id", "gene_id", "chrom", "start0", "end0"]
                       + [c for c in a.strata.split() if c in regions.columns]].copy()
@@ -235,6 +275,9 @@ def main():
             tab["file:" + f] = Xf[:, j].astype(int)
         for k, s in enumerate(set_names):
             tab["set:" + s] = Xs[:, k].astype(int)
+        for k, s in enumerate(set_names):
+            tab["cov_bp:" + s] = Cx[:, k].astype(int)
+        tab["length"] = L
         tab.to_csv(out / "enrich_regions.tsv", sep="\t", index=False)
 
     np.savez_compressed(
@@ -244,7 +287,9 @@ def main():
         file_names=np.array(file_names), file_set=file_set,
         strata_names=np.array(names), n=np.array([int(m.sum()) for m in masks]),
         obs_set=obs_set, obs_file=obs_file, obs_joint=obs_joint,
-        null_set=null_set, null_file=null_file, null_joint=null_joint)
+        null_set=null_set, null_file=null_file, null_joint=null_joint,
+        obs_cov=obs_cov, obs_len=obs_len, null_cov=null_cov,
+        bg_cov=bg_cov, bg_len=np.array(bg_len, dtype=np.int64))
     set_desc = ", ".join(s["set"] + ":" + s["source"] for s in sets)
     log(f"{a.gene}: {n} regions, {S} sets ({set_desc})")
 
