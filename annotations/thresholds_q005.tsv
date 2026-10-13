@@ -3,4 +3,4 @@ astro_h3k27ac_bw	/home/dh2226/perturb_enrich/annotations/encode/astro/h3k27ac/EN
 SN_h3k27ac_bw	/home/dh2226/perturb_enrich/annotations/encode/substantia_nigra/h3k27ac/ENCFF942SMN.bigWig	pvalue	BH_q	0.05	2.79777	3086799710	98410822	0.03188118156198738	537.0
 astro_h3k4me1_bw	/home/dh2226/perturb_enrich/annotations/encode/astro/h3k4me1/ENCFF016ZJH.hg38.bigWig	pvalue	BH_q	0.05	2.83361	3086443869	90704218	0.029387937007708465	71.0
 SN_h3k4me1_bw	/home/dh2226/perturb_enrich/annotations/encode/substantia_nigra/h3k4me1/ENCFF028ADR.bigWig	pvalue	BH_q	0.05	2.8672799999999996	3086305320	84509625	0.02738213372875241	52.0
-neu_chip_bw	/nfs/roberts/pi/pi_cs3222/Reference/ChIP_Tracks/PFC_NeuN_hg38_filtered.bw	pvalue	BH_q	0.05	1.99955	3088269832	1564931150	0.5067339433182017	197.0
+neu_chip_bw	/nfs/roberts/pi/pi_cs3222/Reference/ChIP_Tracks/PFC_NeuN_hg38_filtered.bw	counts	quantile	0.97	8.999945	3088269832	106124700	0.034363804257114536	197.0

@@ -16,4 +16,4 @@ source ./config.sh
 module load miniconda
 source "$(conda info --base)/etc/profile.d/conda.sh"
 conda activate perturb
-python annotations/scripts/calibrate_thresholds.py --manifest "$TRACKS_MANIFEST" --out "$THRESHOLDS_TSV" --alpha "$ENRICH_QVALUE"
+python annotations/scripts/calibrate_thresholds.py --manifest "$TRACKS_MANIFEST" --out "$THRESHOLDS_TSV" --alpha "$ENRICH_QVALUE" --quantile 0.97
