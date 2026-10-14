@@ -9,3 +9,4 @@ annotations/tss.hg38.bed
 .conda/
 __pycache__/
 windows.tsv
+nativeAG

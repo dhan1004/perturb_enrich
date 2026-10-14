@@ -81,6 +81,23 @@ def overlaps(qs, qe, ps, pe):
     return res
 
 
+def coverage(qs, qe, ps, pe):
+    """bp of each query [qs,qe) covered by the merged, sorted intervals (ps,pe) (global coords).
+    Continuous counterpart of overlaps(): f(x) = bp of the interval set lying left of x."""
+    qs = np.asarray(qs, dtype=np.int64)
+    qe = np.asarray(qe, dtype=np.int64)
+    if len(ps) == 0:
+        return np.zeros(len(qs), dtype=np.int64)
+    cum = np.r_[0, np.cumsum(pe - ps)]
+
+    def left_of(x):
+        i = np.searchsorted(ps, x, side="right")          # intervals starting at or before x
+        overhang = np.where(i > 0, np.clip(pe[np.maximum(i - 1, 0)] - x, 0, None), 0)
+        return cum[i] - overhang
+
+    return left_of(qe) - left_of(qs)
+
+
 def resolve_chrom(chrom, available):
     if chrom in available:
         return chrom
@@ -180,6 +197,60 @@ def enrich_rows(stratum, n, names, obs, null):
     if len(df):
         df["q_enrich"] = bh(df.p_enrich.values)
         df["q_deplete"] = bh(df.p_deplete.values)
+    return df
+
+
+def cov_rows(stratum, n, total_bp, names, obs, null, bg_frac):
+    """Base-pair coverage enrichment. obs: (X,) covered bp over the perturbed regions;
+    null: (P, X) covered bp over the same regions re-placed in the tested windows (same
+    lengths, so the denominator total_bp is identical); bg_frac: (X,) fraction of the tested
+    territory that is active (reference level)."""
+    rows = []
+    for j, nm in enumerate(names):
+        nf = null[:, j] / total_bp
+        pe, pd_ = emp_p(obs[j], null[:, j])
+        m, sd = nf.mean(), nf.std(ddof=1)
+        rows.append(dict(
+            stratum=stratum, annotation=nm, n_regions=n, perturbed_bp=int(total_bp),
+            covered_bp=int(obs[j]), frac_covered=obs[j] / total_bp, frac_tested_bg=bg_frac[j],
+            null_mean_frac=m, null_sd_frac=sd,
+            fold_enrichment=(obs[j] / total_bp) / m if m > 0 else np.nan,
+            log2_enrichment=float(np.log2((obs[j] + 0.5) / (null[:, j].mean() + 0.5))),
+            z=((obs[j] / total_bp) - m) / sd if sd > 0 else np.nan,
+            p_enrich=pe, p_deplete=pd_))
+    df = pd.DataFrame(rows)
+    if len(df):
+        df["q_enrich"] = bh(df.p_enrich.values)
+        df["q_deplete"] = bh(df.p_deplete.values)
+    return df
+
+
+def cov_pairwise_rows(stratum, n, total_bp, sets, obs, null):
+    """Does annotation A show more (or less) enrichment than B? The same permuted placements
+    are scored for every annotation, so the null for 'enrichment of A minus enrichment of B' is
+    the permutation distribution of (A - B) centred on its mean; baseline density differences
+    between annotations cancel. obs (S,), null (P, S) are covered bp."""
+    rows = []
+    S, P = len(sets), null.shape[0]
+    for i in range(S):
+        for j in range(i + 1, S):
+            d_null = (null[:, i] - null[:, j]) / total_bp
+            c_null = d_null - d_null.mean()
+            c_obs = (obs[i] - obs[j]) / total_bp - d_null.mean()   # differential enrichment
+            ei = np.log2((obs[i] + 0.5) / (null[:, i].mean() + 0.5))
+            ej = np.log2((obs[j] + 0.5) / (null[:, j].mean() + 0.5))
+            rows.append(dict(
+                stratum=stratum, set_a=sets[i], set_b=sets[j], n_regions=n,
+                frac_a=obs[i] / total_bp, frac_b=obs[j] / total_bp,
+                null_mean_frac_a=null[:, i].mean() / total_bp,
+                null_mean_frac_b=null[:, j].mean() / total_bp,
+                log2_enrichment_a=float(ei), log2_enrichment_b=float(ej),
+                delta_log2_enrichment=float(ei - ej), diff_in_enrichment_frac=float(c_obs),
+                p_a_greater=(1 + (c_null >= c_obs).sum()) / (1 + P),
+                p_two_sided=(1 + (np.abs(c_null) >= abs(c_obs)).sum()) / (1 + P)))
+    df = pd.DataFrame(rows)
+    if len(df):
+        df["q_two_sided"] = bh(df.p_two_sided.values)
     return df
 
 

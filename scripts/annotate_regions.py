@@ -66,7 +66,7 @@ def bigwig_signal(reg, path, stat):
     return vals
 
 def write_bed6(df, path):
-    out = df[["chrom", "start0", "end0", "region_id", "mean_signed_effect", "gene_strand"]].copy()
+    out = df[["chrom", "start0", "end0", "gene_id", "mean_signed_effect", "gene_strand"]].copy()
     out.to_csv(path, sep="\t", header=False, index=False)
 
 def add_track_column(region, name, values):
