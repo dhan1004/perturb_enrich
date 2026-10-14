@@ -13,6 +13,7 @@
 #   N=$(bash -c 'source config.sh; ls -d "$PERTURB_ROOT_SCAN"/*/results/Astrocyte/regions.tsv | wc -l')
 #   JID=$(sbatch --parsable --array=1-${N}%50 enrich_array.sbatch)
 #   sbatch --dependency=afterok:${JID} aggregate_enrich.sbatch
+#   sbatch --dependency=afterok:<aggregate_jobid> gene_level_test.sbatch   # gene bootstrap / contrasts / null dists
 
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:?must be run under sbatch}"

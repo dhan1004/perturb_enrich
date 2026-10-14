@@ -30,5 +30,17 @@ export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz"
 export ENRICH_QVALUE=0.05      # BH q cutoff used to call a bigwig bp "active" (p-value tracks)
 export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds_q${ENRICH_QVALUE/./}.tsv"
 export ENRICH_NPERM=1000
-export ENRICH_STRATA="direction annotation is_distal_enh"
+export ENRICH_STRATA="direction annotation is_distal_enh len_bin"
 export ENRICH_EXCLUDE_PERTURBED=0   # 1 = null drawn only from tested sequence outside perturbed regions
+
+# distal-enhancer call (annotate_regions.py): a region is a distal enhancer if it overlaps a BED peak of
+# an ENH_ASSAYS assay from ENH_CELLTYPES (any manifest role) and is outside the TSS +/- TSS_PAD mask
+# (BEDs whose manifest assay is in MASK_ASSAYS). Defaults are the same if these are left unset.
+export ENH_ASSAYS="h3k27ac,atac"
+export ENH_CELLTYPES="astrocyte"
+export MASK_ASSAYS="tss"
+
+# what counts as "distal" (is_distal_enh / distal_enh.bed -> HOMER foreground):
+#   enhancer = enhancer peak (above) and outside the TSS mask;  hari = HARI's own `annotation` == "distal"
+# With "hari", drop is_distal_enh from ENRICH_STRATA (it duplicates annotation=distal).
+export DISTAL_MODE="enhancer"

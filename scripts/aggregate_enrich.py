@@ -9,7 +9,9 @@ Outputs in --outdir (default <out-root>/enrichment):
     enrichment_by_set.tsv     observed vs null overlap fraction per annotation set and stratum
     enrichment_by_file.tsv    same per file (bigwig/bed) within sets
     set_pairwise.tsv          co-occurrence of two sets (observed joint overlap vs null joint)
-    region_concordance.tsv    every perturbed region with its 0/1 values and covered bp (all genes)
+    region_concordance.tsv    every perturbed region with its 0/1 values and covered bp (all genes), plus the
+                              per-region permutation test: exp_cov_bp:<set>, p_cov:<set>, q_cov:<set>
+                              (BH across all regions per set; floor of p is 1/(nperm+1))
     per_gene_counts.tsv       per-gene region counts and set overlap counts
   Base-pair coverage (needs enrich_counts.npz written by the coverage-aware enrich_gene.py):
     enrichment_cov_by_set.tsv fraction of perturbed bp covered by active signal vs the permutation
@@ -154,7 +156,12 @@ def main():
     regs =[pd.read_csv(p.with_name("enrich_regions.tsv"), sep="\t", dtype={"chrom": str})
             for p in paths if p.with_name("enrich_regions.tsv").exists()]
     if regs:
-        pd.concat(regs, ignore_index=True).to_csv(outdir / "region_concordance.tsv", sep="\t", index=False)
+        rc = pd.concat(regs, ignore_index=True)
+        # per-region permutation p (enrich_gene.py) -> BH across ALL regions, separately per set.
+        # Genes run before the per-region test existed have NaN p and are left out of the BH family.
+        for col in [c for c in rc.columns if c.startswith("p_cov:")]:
+            rc["q_cov:" + col[len("p_cov:"):]] = bh(rc[col].values)
+        rc.to_csv(outdir / "region_concordance.tsv", sep="\t", index=False)
     print(f"[aggregate] wrote {outdir}", file=sys.stderr)
 
 

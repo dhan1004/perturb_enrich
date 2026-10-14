@@ -10,6 +10,9 @@ Inputs
 Outputs (in --outdir)
   annotated.tsv     one row per region: ALL original regions.tsv columns, then per-track
                     signal / overlap counts, then in_promoter_mask / has_enh_call / is_distal_enh
+                    (in_promoter_mask = overlaps a TSS BED [--mask-assays] padded by --tss-pad;
+                    has_enh_call = overlaps a BED peak of an enhancer assay [--enh-assays] from an allowed
+                    cell type [--enh-celltypes]; is_distal_enh = has_enh_call and not in_promoter_mask)
   all_regions.bed   BED6 of every region (region_id in column 4) -> HOMER annotatePeaks
   distal_enh.bed    BED6 of regions flagged as distal enhancers -> HOMER findMotifsGenome
 
@@ -83,7 +86,19 @@ def main():
     p.add_argument("--chrom-sizes", required=True, help="hg38 chrom.sizes (for padding the TSS mask)")
     p.add_argument("--tss-pad", type=int, default=5000)
     p.add_argument("--enh-assays", default="h3k27ac,atac",
-                   help="comma-separated assays whose BED calls define an enhancer")
+                   help="comma-separated assays whose BED peaks define an enhancer (case-insensitive; "
+                        "any manifest role, including 'mask')")
+    p.add_argument("--enh-celltypes", default="",
+                   help="comma-separated manifest celltypes allowed to contribute enhancer peaks "
+                        "(case-insensitive; empty = any), e.g. 'astrocyte'")
+    p.add_argument("--mask-assays", default="tss",
+                   help="comma-separated assays of the BED rows padded by --tss-pad into the promoter mask "
+                        "(case-insensitive). Only these BEDs form the mask, NOT every role=mask row: "
+                        "role=mask is also used in tracks.tsv to hide peak BEDs from plots/enrichment sets")
+    p.add_argument("--distal-mode", default="enhancer", choices=["enhancer", "hari"],
+                   help="how is_distal_enh (and distal_enh.bed for HOMER) is defined. enhancer: enhancer peak "
+                        "and outside the TSS mask. hari: the HARI scan's own `annotation` column == 'distal' "
+                        "(no overlap with the target gene's TSS +/- promoter_half_bp; no enhancer evidence)")
     p.add_argument("--bw-stat", default="mean", choices=["mean", "max", "min"])
     args = p.parse_args()
 
@@ -95,33 +110,54 @@ def main():
 
     tracks_tsv = pd.read_csv(args.tracks, sep=r"\s+", dtype=str).fillna("")
 
-    enh_assays = {x.strip() for x in args.enh_assays.split(",") if x.strip()}
+    def split_set(s):
+        return {x.strip().lower() for x in s.split(",") if x.strip()}
+
+    enh_assays = split_set(args.enh_assays)
+    enh_celltypes = split_set(args.enh_celltypes)
+    mask_assays = split_set(args.mask_assays)
     mask_total = np.zeros(len(regions), dtype=int)
     enh_cols = []
 
     for _, t in tracks_tsv.iterrows():
+        assay, celltype = t["assay"].strip().lower(), t["celltype"].strip().lower()
         if t["type"] == "bigwig":
             add_track_column(regions, t["name"], bigwig_signal(regions, t["path"], args.bw_stat))
         elif t["type"] == "bed":
-            role = t["role"]
-            if role == "mask":
+            if assay in mask_assays:
+                # promoter mask: TSS BED padded by --tss-pad
                 bt = pybedtools.BedTool(t["path"]).slop(b=args.tss_pad, g=args.chrom_sizes)
                 mask_total += overlap_counts(regions, bt).to_numpy()
             else:
+                # every other BED (any role) becomes a peak-count column; enhancer-assay peaks from an
+                # allowed cell type also count as an enhancer call
                 add_track_column(regions, t["name"], overlap_counts(regions, pybedtools.BedTool(t["path"])))
-                if t["assay"] in enh_assays:
+                if assay in enh_assays and (not enh_celltypes or celltype in enh_celltypes):
                     enh_cols.append(t["name"])
-    
+
+    if not enh_cols:
+        log(f"WARNING {args.gene}: no BED rows match --enh-assays {sorted(enh_assays)} "
+            f"/ --enh-celltypes {sorted(enh_celltypes) or 'any'}; no region can be a distal enhancer")
+    if not mask_assays & {a.strip().lower() for a in tracks_tsv.loc[tracks_tsv['type'] == 'bed', 'assay']}:
+        log(f"WARNING {args.gene}: no BED rows match --mask-assays {sorted(mask_assays)}; "
+            "promoter mask is empty")
+
     regions["in_promoter_mask"] = mask_total > 0
     regions["has_enh_call"] = (regions[enh_cols].sum(axis=1) > 0) if enh_cols else False
-    distal = (~regions["in_promoter_mask"]) & regions["has_enh_call"]
+    if args.distal_mode == "hari":
+        if "annotation" not in regions.columns:
+            sys.exit("[annotate] --distal-mode hari needs an `annotation` column in regions.tsv")
+        distal = regions["annotation"] == "distal"
+    else:
+        distal = (~regions["in_promoter_mask"]) & regions["has_enh_call"]
     regions["is_distal_enh"] = distal
 
     regions.to_csv(out / "annotated.tsv", sep="\t", index=False)
     write_bed6(regions, out / "all_regions.bed")
     write_bed6(regions[regions["is_distal_enh"]], out / "distal_enh.bed")
     log(f"{args.gene}: {int(regions.is_distal_enh.sum())} distal enhancer regions "
-        f"({int(regions.in_promoter_mask.sum())} in promoter mask)")
+        f"({int(regions.has_enh_call.sum())} with an enhancer peak, "
+        f"{int(regions.in_promoter_mask.sum())} in promoter mask, of {len(regions)})")
 
 if __name__ == "__main__":
     main()

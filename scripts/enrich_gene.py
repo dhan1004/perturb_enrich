@@ -18,8 +18,15 @@ region and for every permuted placement. The tested territory's own active fract
 background level) is stored alongside. Region lengths are identical in observed and null, so
 pooled coverage fractions are covered bp / perturbed bp.
 
+Per-region test: for every region and set, exp_cov_bp = mean covered bp over that region's own
+permuted placements and p_cov = (1 + #{placements covering >= the observed bp}) / (1 + nperm). The
+resolution floor is 1/(nperm+1); BH across regions is applied in aggregate_enrich.py (q_cov:<set>).
+It flags individual regions that are unusually active for their locus; the set-level enrichment
+tests above remain the right test for "are perturbed regions enriched".
+
 Outputs in --outdir (default $OUT_ROOT/genes/<gene>):
-    enrich_regions.tsv   region_id + 0/1 per file and per set, covered bp per set (+ strata columns)
+    enrich_regions.tsv   region_id + 0/1 per file and per set, covered bp per set (+ strata columns),
+                         expected covered bp (exp_cov_bp:<set>) and per-region p (p_cov:<set>)
     enrich_counts.npz    observed and null overlap counts per stratum, plus covered-bp totals
                          (obs_cov, null_cov, obs_len) and background (bg_cov, bg_len)
                          (input to aggregation)
@@ -38,6 +45,10 @@ from enrich_lib import (G, build_sampler, choose_sources, coverage, merge,  # no
                         norm_path, overlaps, read_manifest, resolve_chrom, subtract)
 
 
+LEN_BIN_EDGES = [0, 5_000, 20_000, 50_000, np.inf]
+LEN_BIN_LABELS = ["lt5kb", "5to20kb", "20to50kb", "ge50kb"]
+
+
 def log(msg):
     print(f"[enrich] {msg}", file=sys.stderr, flush=True)
 
@@ -48,6 +59,10 @@ def read_regions(path):
               + df["start0"].astype(str) + "|" + df["end0"].astype(str))
     df = df.drop_duplicates("region_id").reset_index(drop=True)
     df["length"] = df["end0"] - df["start0"]
+    # region-length bin, usable as a stratum (--strata ... len_bin) to check that results are not driven
+    # by a few very long regions (coverage totals are bp-weighted)
+    df["len_bin"] = pd.cut(df["length"], bins=LEN_BIN_EDGES, labels=LEN_BIN_LABELS,
+                           right=False).astype(str)
     return df
 
 
@@ -132,8 +147,9 @@ def main():
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--nperm", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--strata", default="direction annotation is_distal_enh",
-                    help="space-separated columns (regions.tsv / annotated.tsv) to also analyse per level")
+    ap.add_argument("--strata", default="direction annotation is_distal_enh len_bin",
+                    help="space-separated columns (regions.tsv / annotated.tsv, or the derived len_bin = "
+                         "region length bin lt5kb|5to20kb|20to50kb|ge50kb) to also analyse per level")
     ap.add_argument("--exclude-perturbed", action="store_true")
     a = ap.parse_args()
 
@@ -248,6 +264,10 @@ def main():
         Nf, Ns = binarize(starts, qe_null)
         Nf, Ns = Nf.reshape(P, n, F), Ns.reshape(P, n, S)
         Nc = cover(starts, qe_null).reshape(P, n, S)
+        # per-region empirical test: how often does THIS region's own re-placement (same gene, same
+        # length) cover at least as many active bp as the observed region? (+1 so p >= 1/(P+1))
+        exp_cov = Nc.mean(axis=0)
+        p_cov = (1 + (Nc >= Cx[None, :, :]).sum(axis=0)) / (1 + P)
 
         for k, m in enumerate(masks):
             x = Xs[m].astype(np.int32)
@@ -277,6 +297,10 @@ def main():
             tab["set:" + s] = Xs[:, k].astype(int)
         for k, s in enumerate(set_names):
             tab["cov_bp:" + s] = Cx[:, k].astype(int)
+        for k, s in enumerate(set_names):
+            tab["exp_cov_bp:" + s] = exp_cov[:, k]
+        for k, s in enumerate(set_names):
+            tab["p_cov:" + s] = p_cov[:, k]
         tab["length"] = L
         tab.to_csv(out / "enrich_regions.tsv", sep="\t", index=False)
 

@@ -4,7 +4,7 @@
 usage: python run_gene.py --gene ENSG00000002549 --regions regions.tsv [--config config.sh] [--outdir DIR]
 
 Reads config.sh for TRACKS_MANIFEST, CHROM_SIZES, TSS_TARGET_BED, GENE_TRACK and OUT_ROOT
-(optional: TSS_PAD, ENH_ASSAYS, CELLTYPE).
+(optional: TSS_PAD, ENH_ASSAYS, ENH_CELLTYPES, MASK_ASSAYS, DISTAL_MODE, CELLTYPE).
 Annotation outputs go to $OUT_ROOT/genes/<gene>/ unless --outdir is given.
 """
 import argparse
@@ -39,7 +39,10 @@ def main():
                     "--gene", args.gene, "--regions", args.regions, "--outdir", str(outdir),
                     "--tracks", config["TRACKS_MANIFEST"], "--chrom-sizes", config["CHROM_SIZES"],
                     "--tss-pad", config.get("TSS_PAD", "5000"),
-                    "--enh-assays", config.get("ENH_ASSAYS", "H3K27ac,ATAC")],
+                    "--enh-assays", config.get("ENH_ASSAYS", "h3k27ac,atac"),
+                    "--enh-celltypes", config.get("ENH_CELLTYPES", "astrocyte"),
+                    "--mask-assays", config.get("MASK_ASSAYS", "tss"),
+                    "--distal-mode", config.get("DISTAL_MODE", "enhancer")],
                    check=True)
 
     print(f"[run_gene] {args.gene}: homer", flush=True)
@@ -58,7 +61,7 @@ def main():
                   "--outdir", str(outdir),
                   "--tracks", config["TRACKS_MANIFEST"], "--thresholds", config["THRESHOLDS_TSV"],
                   "--nperm", config.get("ENRICH_NPERM", "1000"),
-                  "--strata", config.get("ENRICH_STRATA", "direction annotation is_distal_enh")]
+                  "--strata", config.get("ENRICH_STRATA", "direction annotation is_distal_enh len_bin")]
     if config.get("ENRICH_EXCLUDE_PERTURBED", "0") == "1":
         enrich_cmd.append("--exclude-perturbed")
     subprocess.run(enrich_cmd, check=True)
