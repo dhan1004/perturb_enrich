@@ -44,3 +44,10 @@ export MASK_ASSAYS="tss"
 #   enhancer = enhancer peak (above) and outside the TSS mask;  hari = HARI's own `annotation` == "distal"
 # With "hari", drop is_distal_enh from ENRICH_STRATA (it duplicates annotation=distal).
 export DISTAL_MODE="enhancer"
+
+# HOMER motif / GO foregrounds (space-separated), run per gene by run_homer.sh. Annotation of ALL regions
+# (homer_annot.tsv) always runs and keeps each region's HARI class.
+#   distal_enh -> distal_enh.bed -> motifs/ go/ ;  all -> every perturbed region -> motifs_all/ go_all/
+#   distal | TSS_proximal | TSS_boundary -> that HARI class -> motifs_<class>/ go_<class>/
+# e.g. "all distal TSS_proximal TSS_boundary" for everything plus per-class runs.
+export HOMER_FOREGROUNDS="distal_enh"
