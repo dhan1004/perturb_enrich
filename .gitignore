@@ -9,4 +9,8 @@ annotations/tss.hg38.bed
 .conda/
 __pycache__/
 windows.tsv
-nativeAG
+nativeAG/__pycache__
+nativeAG/native_astrocyte_pilot
+nativeAG/NativeAG*
+scripts/enrichment_figs
+0.*

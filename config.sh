@@ -4,12 +4,14 @@
 # export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_stride250_full"
 # path to all 1000 ish gene list output
 
-export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
+# export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
+export PERTURB_ROOT_SCAN="/home/dh2226/perturb_enrich/nativeAG/native_astrocyte_pilot"
 export TRACKS_MANIFEST="/home/dh2226/perturb_enrich/annotations/tracks.tsv"
 export CHROM_SIZES="/home/dh2226/hg38.chrom.sizes"
 
 # outputs
-export OUT_ROOT="/home/dh2226/scratch_pi_cs3222/dh2226/20261005"
+# export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/20261014"
+export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
 
 # genome
 export GENOME="hg38"
@@ -30,5 +32,26 @@ export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz"
 export ENRICH_QVALUE=0.05      # BH q cutoff used to call a bigwig bp "active" (p-value tracks)
 export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds_q${ENRICH_QVALUE/./}.tsv"
 export ENRICH_NPERM=1000
-export ENRICH_STRATA="direction annotation is_distal_enh"
+# export ENRICH_STRATA="direction annotation is_distal_enh len_bin"
+export ENRICH_STRATA="direction annotation len_bin"
 export ENRICH_EXCLUDE_PERTURBED=0   # 1 = null drawn only from tested sequence outside perturbed regions
+
+# distal-enhancer call (annotate_regions.py): a region is a distal enhancer if it overlaps a BED peak of
+# an ENH_ASSAYS assay from ENH_CELLTYPES (any manifest role) and is outside the TSS +/- TSS_PAD mask
+# (BEDs whose manifest assay is in MASK_ASSAYS). Defaults are the same if these are left unset.
+export ENH_ASSAYS="h3k27ac,atac"
+export ENH_CELLTYPES="astrocyte"
+export MASK_ASSAYS="tss"
+
+# what counts as "distal" (is_distal_enh / distal_enh.bed -> HOMER foreground):
+#   enhancer = enhancer peak (above) and outside the TSS mask;  hari = HARI's own `annotation` == "distal"
+# With "hari", drop is_distal_enh from ENRICH_STRATA (it duplicates annotation=distal).
+export DISTAL_MODE="hari"
+
+# HOMER motif / GO foregrounds (space-separated), run per gene by run_homer.sh. Annotation of ALL regions
+# (homer_annot.tsv) always runs and keeps each region's HARI class.
+#   distal_enh -> distal_enh.bed -> motifs/ go/ ;  all -> every perturbed region -> motifs_all/ go_all/
+#   distal | TSS_proximal | TSS_boundary -> that HARI class -> motifs_<class>/ go_<class>/
+# e.g. "all distal TSS_proximal TSS_boundary" for everything plus per-class runs.
+# export HOMER_FOREGROUNDS="distal_enh"
+export HOMER_FOREGROUNDS="all distal TSS_proximal TSS_boundary"
