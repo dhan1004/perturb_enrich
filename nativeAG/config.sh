@@ -1,8 +1,10 @@
-export SCAN_DIR="$PWD"
+export SCAN_DIR="/home/dh2226/perturb_enrich/nativeAG"
 export HARI_SCAN_DIR=/nfs/roberts/pi/pi_cs3222/Reference/PerturbAG
 export FASTA=/nfs/roberts/pi/pi_cs3222/fq37/AMP_PD/wgs-BR-DSNWGS/gatk/vcf/GRCh38.primary_assembly.genome.fa
 export GTF=/home/dh2226/gencode.v46.annotation.gtf.gz
 export TARGETS="$HARI_SCAN_DIR/targets.tsv"
-export NATIVE_SCAN_ROOT="$SCAN_DIR"
+export NATIVE_SCAN_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
 export OUT_BASE="$NATIVE_SCAN_ROOT" 
 export ASSEMBLY=GRCh38
+export SCAN_HALF_WINDOW_BP=500000
+export PYTHON_BIN=/nfs/roberts/pi/pi_cs3222/fq37/conda_envs/AlphaGenome/bin/python

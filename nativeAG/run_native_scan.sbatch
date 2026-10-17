@@ -13,6 +13,7 @@ set -Eeuo pipefail
 trap 'printf "ERROR at line %s (exit %s)\n" "$LINENO" "$?" >&2' ERR
 # Set NATIVE_SCAN_ROOT before sbatch if submitting from a different directory.
 NATIVE_SCAN_ROOT="${NATIVE_SCAN_ROOT:-${SLURM_SUBMIT_DIR:-$PWD}}"
+source "${CONFIG_SH:-$NATIVE_SCAN_ROOT/config.sh}"
 if [[ -n "${CONDA_SH:-}" ]]; then
     : "${CONDA_ENV:?Set CONDA_ENV when using CONDA_SH}"
     source "$CONDA_SH"
@@ -26,6 +27,10 @@ export MPLBACKEND=Agg
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
+
+
+scan_defaults=(--fasta "$FASTA" --gtf "$GTF" --assembly "$ASSEMBLY"
+                  --out-dir "$SCAN_OUT_DIR" --scan-half-window-bp "$SCAN_HALF_WINDOW_BP")
 printf 'Node: %s\n' "$(hostname)"
 printf 'Python: %s\n' "$(command -v "$PYTHON_BIN")"
 if [[ -n "${NATIVE_ARRAY_TARGETS:-}" ]]; then

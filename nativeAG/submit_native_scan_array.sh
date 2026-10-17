@@ -3,6 +3,7 @@
 #          --max-concurrent 2 -- [shared scanner options, excluding --targets/--genes]
 set -Eeuo pipefail
 scan_package_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${CONFIG_SH:-$scan_package_root/config.sh}"
 scan_targets=""
 scan_partition="gpu_h200"
 scan_concurrency=2
