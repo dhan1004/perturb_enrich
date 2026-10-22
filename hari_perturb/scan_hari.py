@@ -27,7 +27,7 @@ import pandas as pd
 
 from core import (VERSION, IndexedFasta, safe_name, sha256_file, canonical_hash, seed_for,
                   onehot, shuffle_window, make_windows, smooth_windows, project_windows,
-                  call_regions, direction)
+                  call_regions, direction, read_bed3, merge_intervals, mask_sequence)
 
 LOG = logging.getLogger("hari_scan")
 REGION_FIELDS = ["gene_id", "cell_type", "chrom", "start0", "end0", "length_bp", "mean_abs_effect",
@@ -145,6 +145,8 @@ def render_outputs(meta, state, output, threshold, min_region_bp, smooth, units,
                               "positive_scramble_fraction": np.mean(selected > 1e-12, axis=1),
                               "negative_scramble_fraction": np.mean(selected < -1e-12, axis=1),
                               "effect_units": units})
+        masked = meta.get("mask_intervals") or []
+        frame["overlaps_mask"] = [any(int(a) < e and int(b) > s for s, e in masked) for a, b in windows]
         effect_cols = [k for k in frame if ("effect" in k or "delta" in k or "scramble_fraction" in k) and k != "effect_units"]
         frame.loc[~valid, effect_cols] = np.nan
         frame["mean_perturbed_prediction_adjusted"] = frame.baseline_prediction_adjusted + frame.mean_signed_delta_adjusted
@@ -261,6 +263,16 @@ def run_scan(args):
         seq, contig_length = fasta.fetch(row.chrom, input_start, input_start + length)
         if not (0 <= tss0 < contig_length):
             raise ValueError("TSS falls outside the declared contig")
+        # Conditional (epistasis) scan: scramble the masked intervals ONCE in the reference, then
+        # scan on top of that background. Window scrambles keep their coordinate-derived seeds, so
+        # a window not touching the mask receives the identical scramble as in the unmasked scan.
+        seq_unmasked, mask_applied = seq, []
+        if args.mask_bed:
+            wanted = [(a, b) for c, a, b in read_bed3(args.mask_bed) if c == row.chrom]
+            seq, mask_applied = mask_sequence(seq, input_start, wanted, args.mask_seed, row.gene_id,
+                                              args.shuffle, args.mask_replicate)
+            if not mask_applied:
+                raise ValueError(f"{row.gene_id}: --mask-bed has no interval inside {row.chrom}:{input_start}-{input_start+length}")
         scan_start, scan_stop = 0, length
         if args.scan_half_window_bp is not None:
             h = args.scan_half_window_bp
@@ -268,6 +280,12 @@ def run_scan(args):
             if scan_start < 0 or scan_stop > length:
                 raise ValueError("Requested scan extends outside sequence seen by the pretrained model")
         windows = make_windows(length, args.window_bp, args.stride_bp, scan_start, scan_stop)
+        if args.windows_bed:
+            keep = merge_intervals([(a, b) for c, a, b in read_bed3(args.windows_bed) if c == row.chrom])
+            windows = np.asarray([w for w in windows if any(input_start + w[0] < b and input_start + w[1] > a for a, b in keep)],
+                                 dtype=np.int64).reshape(-1, 2)
+            if len(windows) == 0:
+                raise ValueError(f"{row.gene_id}: --windows-bed selects no windows")
         accepted = {c: sum(bool(f["residual_accepted"]) for f in bundle["cell_types"][c]["fold_models"]) for c in cells}
         total = {c: len(bundle["cell_types"][c]["fold_models"]) for c in cells}
         meta = dict(version=VERSION, gene_id=row.gene_id, chrom=row.chrom, tss0=tss0, strand=row.strand,
@@ -281,6 +299,9 @@ def run_scan(args):
             target_sd_scale={c:float(np.mean([float(f["target_transform"]["stds"][0]) for f in bundle["cell_types"][c]["fold_models"]])) for c in cells},
             seed=args.seed, shuffle=args.shuffle, window_bp=args.window_bp, stride_bp=args.stride_bp,
             scan_start_offset0=scan_start, scan_stop_offset0=scan_stop,
+            mask_intervals=[[int(a), int(b)] for a, b in mask_applied], mask_seed=args.mask_seed,
+            mask_replicate=args.mask_replicate, windows_bed=sha256_file(args.windows_bed) if args.windows_bed else None,
+            unmasked_sequence_sha256=hashlib.sha256(seq_unmasked).hexdigest(),
             covariate_mode=args.covariate_mode, context_population="external_common" if context is not None else "fold_training_donors",
             contexts_sha256=sha256_file(args.contexts_tsv) if args.contexts_tsv else None,
             max_contexts=args.max_contexts, head_device=args.head_device, head_batch_size=args.head_batch_size,
@@ -341,6 +362,14 @@ def run_scan(args):
             atomic_npz(state_path, **state)
         elif not np.allclose(state["reference_predictions"], ensemble.reference, atol=1e-6, rtol=1e-6):
             raise ValueError("Cached reference prediction is not reproducible")
+        if mask_applied and not (gene_dir / "mask_effect.json").exists():
+            # ensemble reference = masked background, so delta(unmasked) = f(unmasked) - f(masked);
+            # the knockout effect of the mask itself is its negative.
+            back = ensemble.delta(embed(seq_unmasked))
+            atomic_json(gene_dir / "mask_effect.json", dict(
+                cell_types=cells, mask_intervals=[[int(a), int(b)] for a, b in mask_applied],
+                knockout_effect_adjusted=(-back[0]).tolist(), knockout_effect_target_sd=(-back[1]).tolist(),
+                definition="f(masked reference) - f(intact reference), ensemble-averaged, paired at identical profiles"))
         atomic_json(gene_dir / "baseline_contexts.json", ensemble.baseline_rows)
         pd.DataFrame([{k:v for k,v in r.items() if k != "context_ids"} for r in ensemble.baseline_rows]).to_csv(
             gene_dir / "baselines.tsv", sep="\t", index=False)
@@ -403,6 +432,10 @@ def build_parser():
     scan.add_argument("--head-device", choices=["cpu", "gpu"], default="cpu")
     scan.add_argument("--head-batch-size", type=int, default=128)
     scan.add_argument("--scan-half-window-bp", type=int, help="Optional smaller symmetric scan; input remains unchanged")
+    scan.add_argument("--mask-bed", help="BED (genomic, 0-based half-open) of intervals scrambled in the reference BEFORE scanning (conditional scan for epistasis)")
+    scan.add_argument("--mask-seed", type=int, default=7, help="Seed for the mask scramble (separate from --seed)")
+    scan.add_argument("--mask-replicate", type=int, default=0, help="Independent mask scramble replicate; vary it to check the mask result is not one lucky shuffle")
+    scan.add_argument("--windows-bed", help="Only scan windows overlapping these intervals (e.g. the other called regions + matched nulls); cheaper than a full rescan")
     scan.add_argument("--expected-input-length", type=int, help="Fail unless training used exactly this length")
     scan.add_argument("--schema-json", help="Authoritative training shard schema only if absent from legacy bundle")
     scan.add_argument("--embedding-dtype", choices=["auto", "float16", "float32"], default="auto")

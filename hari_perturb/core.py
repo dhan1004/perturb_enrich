@@ -117,6 +117,53 @@ def shuffle_window(block: bytes, rng, method="mononucleotide"):
     return shuffled
 
 
+def read_bed3(path):
+    """chrom, start0, end0 from a BED file (extra columns ignored)."""
+    out = []
+    with open(path) as f:
+        for line in f:
+            if not line.strip() or line.startswith(("#", "track", "browser")):
+                continue
+            col = line.rstrip("\n").split("\t")
+            out.append((col[0], int(col[1]), int(col[2])))
+    return out
+
+
+def merge_intervals(intervals):
+    merged = []
+    for a, b in sorted(intervals):
+        if merged and a <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    return [(a, b) for a, b in merged]
+
+
+def mask_sequence(seq: bytes, input_start, intervals, seed, gene, method="mononucleotide", replicate=0):
+    """Shuffle genomic intervals (0-based half-open) inside `seq`, which starts at `input_start`.
+
+    Intervals are clipped to the sequence and merged. Each merged block is scrambled once
+    with a coordinate-derived seed, so the same mask is reproducible and independent of the
+    window-scramble seeds. Returns (new_seq, applied_intervals). Raises if a block holds
+    ambiguity characters or the scramble changed nothing (a silent no-op mask would
+    look like 'no epistasis').
+    """
+    lo, hi = input_start, input_start + len(seq)
+    applied = merge_intervals([(max(a, lo), min(b, hi)) for a, b in intervals if min(b, hi) > max(a, lo)])
+    out = seq
+    for s, e in applied:
+        a, b = s - input_start, e - input_start
+        block = out[a:b]
+        if set(block) - set(b"ACGT"):
+            raise ValueError(f"Mask {s}-{e} contains ambiguous/padded bases")
+        rng = np.random.default_rng(seed_for(seed, gene, s, e, f"mask{replicate}"))
+        shuffled = shuffle_window(block, rng, method)
+        if shuffled == block:
+            raise ValueError(f"Mask {s}-{e} was unchanged by the scramble (block too short/low complexity)")
+        out = out[:a] + shuffled + out[b:]
+    return out, applied
+
+
 def make_windows(length, width, stride, start=0, stop=None):
     stop = length if stop is None else stop
     if not (0 <= start < stop <= length and 0 < stride <= width <= stop - start):
