@@ -4,14 +4,14 @@
 # export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_stride250_full"
 # path to all 1000 ish gene list output
 
-# export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
-export PERTURB_ROOT_SCAN="/home/dh2226/perturb_enrich/nativeAG/native_astrocyte_pilot"
+export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
+# export PERTURB_ROOT_SCAN="/home/dh2226/perturb_enrich/nativeAG/native_astrocyte_pilot"
 export TRACKS_MANIFEST="/home/dh2226/perturb_enrich/annotations/tracks.tsv"
 export CHROM_SIZES="/home/dh2226/hg38.chrom.sizes"
 
 # outputs
-# export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/20261014"
-export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
+export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/20261014"
+# export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
 
 # genome
 export GENOME="hg38"
@@ -30,7 +30,8 @@ export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz"
 
 # concordance / enrichment
 export ENRICH_QVALUE=0.05      # BH q cutoff used to call a bigwig bp "active" (p-value tracks)
-export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds_q${ENRICH_QVALUE/./}.tsv"
+# export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds_q${ENRICH_QVALUE/./}.tsv"
+export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds.tsv"
 export ENRICH_NPERM=1000
 # export ENRICH_STRATA="direction annotation is_distal_enh len_bin"
 export ENRICH_STRATA="direction annotation len_bin"

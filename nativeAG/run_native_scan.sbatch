@@ -30,7 +30,7 @@ export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 
 scan_defaults=(--fasta "$FASTA" --gtf "$GTF" --assembly "$ASSEMBLY"
-                  --out-dir "$SCAN_OUT_DIR" --scan-half-window-bp "$SCAN_HALF_WINDOW_BP")
+                  --out-dir "$OUT_BASE" --scan-half-window-bp "$SCAN_HALF_WINDOW_BP")
 printf 'Node: %s\n' "$(hostname)"
 printf 'Python: %s\n' "$(command -v "$PYTHON_BIN")"
 if [[ -n "${NATIVE_ARRAY_TARGETS:-}" ]]; then

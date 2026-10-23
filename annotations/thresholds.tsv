@@ -1,0 +1,11 @@
+name	path	signal_type	method	param	threshold	bp_total	bp_active	frac_active	track_max
+astro_h3k27ac_bw	/home/dh2226/perturb_enrich/annotations/encode/astro/h3k27ac/ENCFF836OXF.bigWig	pvalue	BH_q	0.05	2.95924	3086744481	68254774	0.022112220308526404	668.0
+SN_h3k27ac_bw	/home/dh2226/perturb_enrich/annotations/encode/substantia_nigra/h3k27ac/ENCFF942SMN.bigWig	pvalue	BH_q	0.05	2.79777	3086799710	98410822	0.03188118156198738	537.0
+astro_h3k4me1_bw	/home/dh2226/perturb_enrich/annotations/encode/astro/h3k4me1/ENCFF016ZJH.hg38.bigWig	pvalue	BH_q	0.05	2.83361	3086443869	90704218	0.029387937007708465	71.0
+SN_h3k4me1_bw	/home/dh2226/perturb_enrich/annotations/encode/substantia_nigra/h3k4me1/ENCFF028ADR.bigWig	pvalue	BH_q	0.05	2.8672799999999996	3086305320	84509625	0.02738213372875241	52.0
+neu_chip_bw	/nfs/roberts/pi/pi_cs3222/Reference/ChIP_Tracks/PFC_NeuN_hg38_filtered.bw	counts	quantile	0.97	8.999945	3088269832	106124700	0.034363804257114536	197.0
+epilepsy_astro	/home/dh2226/perturb_enrich/annotations/epilepsy/astro/human_astro_nuclei_H3K27ac_epilepsy_pooled_hg38.ucsc.bw	norm	quantile	0.97	2.144625	2113946191	64244175	0.030390638736934626	1505.0
+epilepsy_LHX2	/home/dh2226/perturb_enrich/annotations/epilepsy/astro/human_LHX2nuclei_H3K27ac_epilepsy_pooled_hg38.bw	norm	quantile	0.97	2.144625	2114759459	64235084	0.03037465264743379	1505.0
+epilepsy_dendritic	/home/dh2226/perturb_enrich/annotations/epilepsy/dendritic/human_PU1nuclei_H3K27ac_epilepsy_pooled_hg38.bw	norm	quantile	0.97	1.7152	2347796086	70764868	0.030140977072912627	1024.0
+epilepsy_microglia	/home/dh2226/perturb_enrich/annotations/epilepsy/microglia/human_microglia_H3K27ac_exvivo_pooled_hg38.bw	norm	quantile	0.97	3.47803	1433920249	43040317	0.030015837373114605	1394.0
+epilepsy_oligo	/home/dh2226/perturb_enrich/annotations/epilepsy/olig/human_OLIG2nuclei_H3K27ac_epilepsy_pooled_hg38.bw	norm	quantile	0.97	2.266755	2085128745	62906445	0.03016909394724209	1047.0
