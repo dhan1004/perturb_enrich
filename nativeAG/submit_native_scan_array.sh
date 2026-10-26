@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./ \
+# Usage: ./submit_native_scan_array.sh --targets targets.tsv --partition gpu_h200 \
 #          --max-concurrent 2 -- [shared scanner options, excluding --targets/--genes]
 set -Eeuo pipefail
 scan_package_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"

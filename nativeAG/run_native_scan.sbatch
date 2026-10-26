@@ -46,7 +46,14 @@ print(rows[i]['gene_id'])
 PY
     )"
     "$PYTHON_BIN" "$NATIVE_SCAN_ROOT/scan_native_alphagenome.py" scan \
+        "${scan_defaults[@]}" \
         --targets "$NATIVE_ARRAY_TARGETS" --genes "$array_gene" "$@"
 else
-    "$PYTHON_BIN" "$NATIVE_SCAN_ROOT/scan_native_alphagenome.py" scan "$@"
+    "$PYTHON_BIN" "$NATIVE_SCAN_ROOT/scan_native_alphagenome.py" scan \
+        "${scan_defaults[@]}" "$@"
 fi
+#     "$PYTHON_BIN" "$NATIVE_SCAN_ROOT/scan_native_alphagenome.py" scan \
+#         --targets "$NATIVE_ARRAY_TARGETS" --genes "$array_gene" "$@"
+# else
+#     "$PYTHON_BIN" "$NATIVE_SCAN_ROOT/scan_native_alphagenome.py" scan "$@"
+# fi

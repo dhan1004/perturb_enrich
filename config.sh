@@ -10,7 +10,7 @@ export TRACKS_MANIFEST="/home/dh2226/perturb_enrich/annotations/tracks.tsv"
 export CHROM_SIZES="/home/dh2226/hg38.chrom.sizes"
 
 # outputs
-export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/20261014"
+export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/epilepsy_annot"
 # export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
 
 # genome
