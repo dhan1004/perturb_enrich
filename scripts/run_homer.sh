@@ -11,7 +11,8 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${HERE}/../config.sh"
+# run_gene.py exports PERTURB_CONFIG so its --config is honoured here; standalone runs fall back to ../config.sh
+source "${PERTURB_CONFIG:-${HERE}/../config.sh}"
 export PATH="${HOMER_HOME}/bin:${PATH}"
 
 GENE="${1:?usage: run_homer.sh <gene_id> <outdir>}"

@@ -25,7 +25,14 @@ export PREPARSED_DIR="${OUT_ROOT}/preparsed"
 # resources
 export THREADS=8
 
-export TSS_TARGET_BED="/home/dh2226/perturb_enrich/gene_list/tss_one_base.bed" 
+# One-base TSS BED (BED6; col 4 = Ensembl gene_id; one MANE/canonical TSS per gene, see
+# gene_list/make_tss_bed.py). This is the single TSS source for the whole pipeline: the promoter mask
+# (annotate_regions.py, padded by TSS_PAD) and dist_to_target_tss / tss_class (merge_annotations.py).
+# Do not also list it in tracks.tsv.
+export TSS_BED="/home/dh2226/perturb_enrich/gene_list/tss_one_base.bed"
+# tss_class (final_regions.tsv): TSS_proximal = region covers the TSS; TSS_boundary = nearest region edge is
+# within PROMOTER_HALF_BP of the TSS; distal = otherwise. Keep equal to the HARI scan's --promoter-half-bp.
+export PROMOTER_HALF_BP=5000
 export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz" 
 
 # concordance / enrichment
@@ -39,10 +46,9 @@ export ENRICH_EXCLUDE_PERTURBED=0   # 1 = null drawn only from tested sequence o
 
 # distal-enhancer call (annotate_regions.py): a region is a distal enhancer if it overlaps a BED peak of
 # an ENH_ASSAYS assay from ENH_CELLTYPES (any manifest role) and is outside the TSS +/- TSS_PAD mask
-# (BEDs whose manifest assay is in MASK_ASSAYS). Defaults are the same if these are left unset.
+# (TSS_BED padded by TSS_PAD, default 5000). Defaults are the same if these are left unset.
 export ENH_ASSAYS="h3k27ac,atac"
 export ENH_CELLTYPES="astrocyte"
-export MASK_ASSAYS="tss"
 
 # what counts as "distal" (is_distal_enh / distal_enh.bed -> HOMER foreground):
 #   enhancer = enhancer peak (above) and outside the TSS mask;  hari = HARI's own `annotation` == "distal"
