@@ -147,7 +147,7 @@ def main():
     ap.add_argument("--outdir", required=True)
     ap.add_argument("--nperm", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--strata", default="direction annotation is_distal_enh len_bin",
+    ap.add_argument("--strata", default="direction annotation tss_class len_bin",
                     help="space-separated columns (regions.tsv / annotated.tsv, or the derived len_bin = "
                          "region length bin lt5kb|5to20kb|20to50kb|ge50kb) to also analyse per level")
     ap.add_argument("--exclude-perturbed", action="store_true")
@@ -163,11 +163,11 @@ def main():
     regions = read_regions(a.regions)
     tested = read_tested(tested_path)
 
-    # extra columns produced by stage 1 (is_distal_enh etc.) for stratification
+    # extra columns produced by stage 1 (tss_class) for stratification
     ann = out / "annotated.tsv"
     if ann.exists():
         extra = pd.read_csv(ann, sep="\t", dtype={"chrom": str}, usecols=lambda c: c in (
-            "region_id", "in_promoter_mask", "has_enh_call", "is_distal_enh"))
+            "region_id", "tss_class"))
         extra = extra[[c for c in extra.columns if c == "region_id" or c not in regions.columns]]
         regions = regions.merge(extra, on="region_id", how="left")
 

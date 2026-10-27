@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from enrich_lib import bh  # noqa: E402
 
 PSEUDO = 0.5   # bp pseudo-count, same as cov_rows() in enrich_lib.py
-STRATUM_COLS = ("direction", "annotation", "is_distal_enh", "len_bin")
+STRATUM_COLS = ("direction", "annotation", "tss_class", "len_bin")
 
 
 def log(msg):

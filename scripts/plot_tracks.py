@@ -3,7 +3,7 @@
 
 Tracks, top to bottom: perturbation effect (mean_signed_effect from annotated.tsv, red = increase,
 blue = decrease), optional external perturbation track, manifest bigwigs, manifest peak/cCRE BEDs,
-all perturbation regions, distal enhancers, TSS of every gene in the window, TSS of the target gene,
+perturbed regions by tss_class (TSS_proximal / TSS_boundary / distal), TSS of every gene in the window, TSS of the target gene,
 gene models. Only the gene models carry per-feature labels. Tracks are separated by spacers; heights
 and spacer size are the H_* / SPACER constants below.
 
@@ -196,7 +196,7 @@ def main():
     a = p.parse_args()
 
     out = Path(a.outdir)
-    all_bed, distal_bed = out / "all_regions.bed", out / "distal_enh.bed"
+    all_bed = out / "all_regions.bed"
     chrom, start, end = window(all_bed, a.flank)
 
     symbol = a.gene_symbol or gene_symbol(a.gene_track, a.gene)
@@ -256,7 +256,11 @@ def main():
             blocks.append(bed_block(t["name"], t["path"], color()))
         
     # blocks.append(bed_block("perturbed regions", all_bed, "#999999"))
-    blocks.append(bed_block("distal enhancers", distal_bed, "#000000"))
+    # perturbed regions by tss_class (class_<tss_class>.bed from annotate_regions.py; only non-empty classes)
+    for cls, col in (("TSS_proximal", "#d62728"), ("TSS_boundary", "#ff7f0e"), ("distal", "#000000")):
+        cls_bed = out / f"class_{cls}.bed"
+        if cls_bed.exists() and cls_bed.stat().st_size:
+            blocks.append(bed_block(cls, cls_bed, col, f"{cls} regions"))
 
     # TSS: the manifest's TSS BED is role=mask (used to exclude promoters in annotate_regions.py), so
     # it is skipped by the generic BED loop above. Plot it explicitly. Not cell-type specific, hence man_all.

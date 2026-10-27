@@ -7,7 +7,6 @@
 export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
 # export PERTURB_ROOT_SCAN="/home/dh2226/perturb_enrich/nativeAG/native_astrocyte_pilot"
 export TRACKS_MANIFEST="/home/dh2226/perturb_enrich/annotations/tracks.tsv"
-export CHROM_SIZES="/home/dh2226/hg38.chrom.sizes"
 
 # outputs
 export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/epilepsy_annot"
@@ -26,12 +25,12 @@ export PREPARSED_DIR="${OUT_ROOT}/preparsed"
 export THREADS=8
 
 # One-base TSS BED (BED6; col 4 = Ensembl gene_id; one MANE/canonical TSS per gene, see
-# gene_list/make_tss_bed.py). This is the single TSS source for the whole pipeline: the promoter mask
-# (annotate_regions.py, padded by TSS_PAD) and dist_to_target_tss / tss_class (merge_annotations.py).
-# Do not also list it in tracks.tsv.
+# gene_list/make_tss_bed.py). The single TSS source for the pipeline: dist_to_target_tss and tss_class are
+# computed from it in annotate_regions.py (step 1, before HOMER). Do not also list it in tracks.tsv.
 export TSS_BED="/home/dh2226/perturb_enrich/gene_list/tss_one_base.bed"
-# tss_class (final_regions.tsv): TSS_proximal = region covers the TSS; TSS_boundary = nearest region edge is
-# within PROMOTER_HALF_BP of the TSS; distal = otherwise. Keep equal to the HARI scan's --promoter-half-bp.
+# tss_class (annotated.tsv / final_regions.tsv): TSS_proximal = region covers the TSS; TSS_boundary = nearest
+# region edge is within PROMOTER_HALF_BP of the TSS; distal = otherwise. Keep equal to the HARI scan's
+# --promoter-half-bp. This is separate from the scan's own `annotation` column, which is left untouched.
 export PROMOTER_HALF_BP=5000
 export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz" 
 
@@ -40,25 +39,12 @@ export ENRICH_QVALUE=0.05      # BH q cutoff used to call a bigwig bp "active" (
 # export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds_q${ENRICH_QVALUE/./}.tsv"
 export THRESHOLDS_TSV="/home/dh2226/perturb_enrich/annotations/thresholds.tsv"
 export ENRICH_NPERM=1000
-# export ENRICH_STRATA="direction annotation is_distal_enh len_bin"
-export ENRICH_STRATA="direction annotation len_bin"
+export ENRICH_STRATA="direction annotation tss_class len_bin"   # annotation = HARI scan call; tss_class = recomputed
 export ENRICH_EXCLUDE_PERTURBED=0   # 1 = null drawn only from tested sequence outside perturbed regions
 
-# distal-enhancer call (annotate_regions.py): a region is a distal enhancer if it overlaps a BED peak of
-# an ENH_ASSAYS assay from ENH_CELLTYPES (any manifest role) and is outside the TSS +/- TSS_PAD mask
-# (TSS_BED padded by TSS_PAD, default 5000). Defaults are the same if these are left unset.
-export ENH_ASSAYS="h3k27ac,atac"
-export ENH_CELLTYPES="astrocyte"
-
-# what counts as "distal" (is_distal_enh / distal_enh.bed -> HOMER foreground):
-#   enhancer = enhancer peak (above) and outside the TSS mask;  hari = HARI's own `annotation` == "distal"
-# With "hari", drop is_distal_enh from ENRICH_STRATA (it duplicates annotation=distal).
-export DISTAL_MODE="hari"
-
-# HOMER motif / GO foregrounds (space-separated), run per gene by run_homer.sh. Annotation of ALL regions
-# (homer_annot.tsv) always runs and keeps each region's HARI class.
-#   distal_enh -> distal_enh.bed -> motifs/ go/ ;  all -> every perturbed region -> motifs_all/ go_all/
-#   distal | TSS_proximal | TSS_boundary -> that HARI class -> motifs_<class>/ go_<class>/
-# e.g. "all distal TSS_proximal TSS_boundary" for everything plus per-class runs.
-# export HOMER_FOREGROUNDS="distal_enh"
+# HOMER motif / GO foregrounds (space-separated), run per gene by run_homer.sh. Per-region annotation of ALL
+# regions (homer_annot.tsv) always runs and can be filtered by tss_class afterwards; motif / GO enrichment is
+# a test of a SET of regions, so it needs one foreground per class:
+#   all -> every perturbed region -> motifs_all/ go_all/
+#   TSS_proximal | TSS_boundary | distal -> that tss_class -> motifs_<class>/ go_<class>/
 export HOMER_FOREGROUNDS="all distal TSS_proximal TSS_boundary"

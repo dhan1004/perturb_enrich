@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> plot_tracks.py.
+"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> enrich_gene.py -> plot_tracks.py.
 
 usage: python run_gene.py --gene ENSG00000002549 --regions regions.tsv [--config config.sh] [--outdir DIR]
 
 Reads --config (also handed to run_homer.sh through PERTURB_CONFIG, so every step sees the same file):
-  required: TRACKS_MANIFEST, CHROM_SIZES, TSS_BED, THRESHOLDS_TSV, GENE_TRACK, OUT_ROOT
-  optional: TSS_PAD (5000), PROMOTER_HALF_BP (5000), ENH_ASSAYS, ENH_CELLTYPES, DISTAL_MODE, CELLTYPE,
-            ENRICH_NPERM, ENRICH_STRATA, ENRICH_EXCLUDE_PERTURBED
-TSS_BED is the single TSS source (promoter mask, distance to target TSS, tss_class); it is not a tracks.tsv row.
+  required: TRACKS_MANIFEST, TSS_BED, THRESHOLDS_TSV, GENE_TRACK, OUT_ROOT
+  optional: PROMOTER_HALF_BP (5000), CELLTYPE, ENRICH_NPERM, ENRICH_STRATA, ENRICH_EXCLUDE_PERTURBED
+TSS_BED is the single TSS source (distance to target TSS and tss_class, both computed in annotate_regions.py,
+before HOMER, so each tss_class can be a HOMER foreground); it is not a tracks.tsv row.
 Annotation outputs go to $OUT_ROOT/genes/<gene>/ unless --outdir is given.
 """
 import argparse
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REQUIRED = ("TRACKS_MANIFEST", "CHROM_SIZES", "TSS_BED", "THRESHOLDS_TSV", "GENE_TRACK", "OUT_ROOT")
+REQUIRED = ("TRACKS_MANIFEST", "TSS_BED", "THRESHOLDS_TSV", "GENE_TRACK", "OUT_ROOT")
 
 
 def load_config(path):
@@ -47,11 +47,8 @@ def main():
     print(f"[run_gene] {args.gene}: annotate", flush=True)
     subprocess.run([sys.executable, str(HERE / "annotate_regions.py"),
                     "--gene", args.gene, "--regions", args.regions, "--outdir", str(outdir),
-                    "--tracks", config["TRACKS_MANIFEST"], "--chrom-sizes", config["CHROM_SIZES"],
-                    "--tss-bed", config["TSS_BED"], "--tss-pad", config.get("TSS_PAD", "5000"),
-                    "--enh-assays", config.get("ENH_ASSAYS", "h3k27ac,atac"),
-                    "--enh-celltypes", config.get("ENH_CELLTYPES", "astrocyte"),
-                    "--distal-mode", config.get("DISTAL_MODE", "enhancer")],
+                    "--tracks", config["TRACKS_MANIFEST"], "--tss-bed", config["TSS_BED"],
+                    "--promoter-half-bp", config.get("PROMOTER_HALF_BP", "5000")],
                    check=True)
 
     print(f"[run_gene] {args.gene}: homer", flush=True)
@@ -61,9 +58,7 @@ def main():
 
     print(f"[run_gene] {args.gene}: merge", flush=True)
     subprocess.run([sys.executable, str(HERE / "merge_annotations.py"),
-                    "--gene", args.gene, "--outdir", str(outdir),
-                    "--tss-bed", config["TSS_BED"],
-                    "--promoter-half-bp", config.get("PROMOTER_HALF_BP", "5000")],
+                    "--gene", args.gene, "--outdir", str(outdir)],
                    check=True)
 
     print(f"[run_gene] {args.gene}: enrich", flush=True)
@@ -73,7 +68,7 @@ def main():
                   "--outdir", str(outdir),
                   "--tracks", config["TRACKS_MANIFEST"], "--thresholds", config["THRESHOLDS_TSV"],
                   "--nperm", config.get("ENRICH_NPERM", "1000"),
-                  "--strata", config.get("ENRICH_STRATA", "direction annotation is_distal_enh len_bin")]
+                  "--strata", config.get("ENRICH_STRATA", "direction annotation tss_class len_bin")]
     if config.get("ENRICH_EXCLUDE_PERTURBED", "0") == "1":
         enrich_cmd.append("--exclude-perturbed")
     subprocess.run(enrich_cmd, check=True)
