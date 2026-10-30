@@ -37,13 +37,31 @@ def log(msg):
     print(f"[plot] {msg}", file=sys.stderr)
 
 
-def window(all_regions_bed, flank):
-    r = pd.read_csv(all_regions_bed, sep="\t", header=None, dtype={0: str})
+def window(all_regions_beds, flank):
+    """
+    plotting window covering every region in one or more all_regions.bed files (union), padded by flank
+    """
+    if isinstance(all_regions_beds, (str, Path)):
+        all_regions_beds = [all_regions_beds]
+    r = pd.concat([pd.read_csv(b, sep="\t", header=None, dtype={0: str}) for b in all_regions_beds])
     chroms = r[0].unique()
     if len(chroms) > 1:
         log(f"WARNING: regions span {len(chroms)} chromosomes; plotting {chroms[0]} only")
     r = r[r[0] == chroms[0]]
     return chroms[0], max(0, int(r[1].min()) - flank), int(r[2].max()) + flank
+
+
+def parse_region(s):
+    """
+    'chr4:89,700,000-89,850,000' -> ('chr4', 89700000, 89850000)
+    """
+    m = re.fullmatch(r"([^:\s]+):([\d,]+)-([\d,]+)", s.strip())
+    if not m:
+        raise SystemExit(f"--region must look like chr4:89700000-89850000, got {s!r}")
+    start, end = int(m.group(2).replace(",", "")), int(m.group(3).replace(",", ""))
+    if end <= start:
+        raise SystemExit(f"--region end must be greater than start, got {s!r}")
+    return m.group(1), start, end
 
 def nice_step(span, target_ticks=8):
     """
@@ -189,13 +207,22 @@ def main():
     p.add_argument("--celltype", default="astrocyte")
     p.add_argument("--tick-step", type=int, default=0, help="ruler tick spacing in bp (default: auto, ~8 ticks)")
     p.add_argument("--flank", type=int, default=20000)
+    p.add_argument("--region", default="",
+                   help="fixed plotting window, e.g. chr4:89700000-89850000. Use the same value for every cell "
+                        "type so the plots share coordinates and can be stacked (overrides --window-from/--flank)")
+    p.add_argument("--window-from", nargs="+", default=[], metavar="ALL_REGIONS_BED",
+                   help="derive the window from the union of these all_regions.bed files (plus --flank) instead of "
+                        "only this cell type's; pass the same list for every cell type")
     p.add_argument("--show-peaks", action="store_true",
                help="also plot manifest peak/cCRE BEDs (default: bigwigs only)")
     a = p.parse_args()
 
     out = Path(a.outdir)
     all_bed = out / "all_regions.bed"
-    chrom, start, end = window(all_bed, a.flank)
+    if a.region:
+        chrom, start, end = parse_region(a.region)
+    else:
+        chrom, start, end = window(a.window_from or all_bed, a.flank)
 
     symbol = a.gene_symbol or gene_symbol(a.gene_track, a.gene)
     if not symbol:
