@@ -8,10 +8,8 @@ astro_h3k4me1_bw   	/home/dh2226/perturb_enrich/annotations/encode/astro/h3k4me1
 SN_h3k4me1_peak	/home/dh2226/perturb_enrich/annotations/encode/substantia_nigra/h3k4me1/ENCFF062VBT.bed	bed	h3k4me1	bulk	mask	na
 SN_h3k4me1_bw  	/home/dh2226/perturb_enrich/annotations/encode/substantia_nigra/h3k4me1/ENCFF028ADR.bigWig	bigwig	h3k4me1	bulk	call	pvalue
 snatac 	/home/dh2226/perturb_enrich/annotations/encode/astro/snatac/ENCODE_snATAC_ENCSR986YGY.hg38.bed	bed	atac	astrocyte	mask	na
-gencode_tss	/home/dh2226/perturb_enrich/gene_list/tss_one_base.bed	bed	tss	bulk	mask	na
 neu_chip_bw	/nfs/roberts/pi/pi_cs3222/Reference/ChIP_Tracks/PFC_NeuN_hg38_filtered.bw	bigwig	h3k27ac	neuron	call	counts
 epilepsy_astro	/home/dh2226/perturb_enrich/annotations/epilepsy/astro/human_astro_nuclei_H3K27ac_epilepsy_pooled_hg38.ucsc.bw	bigwig	h3k27ac	astrocyte	call	norm
-epilepsy_LHX2	/home/dh2226/perturb_enrich/annotations/epilepsy/astro/human_LHX2nuclei_H3K27ac_epilepsy_pooled_hg38.bw	bigwig	h3k27ac	astrocyte	call	norm
 epilepsy_dendritic	/home/dh2226/perturb_enrich/annotations/epilepsy/dendritic/human_PU1nuclei_H3K27ac_epilepsy_pooled_hg38.bw	bigwig	h3k27ac	dendritic	call	norm
 epilepsy_microglia	/home/dh2226/perturb_enrich/annotations/epilepsy/microglia/human_microglia_H3K27ac_exvivo_pooled_hg38.bw	bigwig	h3k27ac	microglia	call	norm
 epilepsy_oligo	/home/dh2226/perturb_enrich/annotations/epilepsy/olig/human_OLIG2nuclei_H3K27ac_epilepsy_pooled_hg38.bw	bigwig	h3k27ac	oligo	call	norm

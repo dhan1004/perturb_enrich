@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Per-gene HOMER step.
+# Step 2: per-gene HOMER step.
 #   usage: run_homer.sh <gene_id> <outdir>
 # <outdir> is the gene's output directory from annotate_regions.py (all_regions.bed, distal_enh.bed).
 #
@@ -34,17 +34,18 @@ echo "[homer] ${GENE}: annotate all regions"
 annotatePeaks.pl "${ALL}" "${GENOME}" -annStats "${OUTDIR}/annStats.txt" \
     > "${OUTDIR}/homer_annot.tsv" 2> "${OUTDIR}/annotatePeaks.log"
 
-# Foregrounds for motif / GO analysis (space-separated HOMER_FOREGROUNDS, default: distal_enh).
-#   distal_enh        distal_enh.bed                    -> motifs/        go/            (as before)
+# Foregrounds for motif / GO analysis (space-separated HOMER_FOREGROUNDS).
+# Motif / GO enrichment tests a SET of regions, so each tss_class needs its own foreground BED, made by
+# annotate_regions.py before this step. (The per-region annotation above covers all regions and can simply be
+# filtered by tss_class afterwards.)
 #   all               every perturbed region            -> motifs_all/    go_all/
-#   <HARI class>      class_<class>.bed, i.e. distal, TSS_proximal, TSS_boundary
+#   <tss_class>       class_<class>.bed, i.e. TSS_proximal, TSS_boundary, distal
 #                                                       -> motifs_<class>/ go_<class>/
-# Every region keeps its HARI class in homer_annot.tsv / annotated.tsv whichever foregrounds are run.
-FOREGROUNDS="${HOMER_FOREGROUNDS:-distal_enh}"
+# Every region keeps its tss_class in annotated.tsv / final_regions.tsv whichever foregrounds are run.
+FOREGROUNDS="${HOMER_FOREGROUNDS:-all TSS_proximal TSS_boundary distal}"
 
 for NAME in ${FOREGROUNDS}; do
     case "${NAME}" in
-        distal_enh) FG="${OUTDIR}/distal_enh.bed";       SUF="";          GOLOG="annotatePeaks_distal.log" ;;
         all)        FG="${OUTDIR}/all_regions.bed";      SUF="_all";      GOLOG="annotatePeaks_go_all.log" ;;
         *)          FG="${OUTDIR}/class_${NAME}.bed";    SUF="_${NAME}";  GOLOG="annotatePeaks_go_${NAME}.log" ;;
     esac

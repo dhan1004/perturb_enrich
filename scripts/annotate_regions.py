@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Step 1 (per gene): annotate perturbation regions with BED overlaps and bigwig signal.
+"""Step 1 (per gene): annotate perturbation regions with BED overlaps and bigwig signal, classifies into 
+TSS-relative distance bins
 
 Inputs
   --regions   regions.tsv (header row; may hold many genes / cell types). Required columns:
@@ -7,16 +8,29 @@ Inputs
   --gene      gene_id to process (Ensembl ID; version suffix like .12 is ignored)
   --manifest  tracks.tsv with columns: name, path, type (bigwig|bed), role (signal|call|mask),
               assay, celltype
-Outputs (in --outdir)
-  annotated.tsv     one row per region: ALL original regions.tsv columns, then per-track
-                    signal / overlap counts, then in_promoter_mask / has_enh_call / is_distal_enh
-                    (in_promoter_mask = overlaps a TSS BED [--mask-assays] padded by --tss-pad;
-                    has_enh_call = overlaps a BED peak of an enhancer assay [--enh-assays] from an allowed
-                    cell type [--enh-celltypes]; is_distal_enh = has_enh_call and not in_promoter_mask)
-  all_regions.bed   BED6 of every region (region_id in column 4) -> HOMER annotatePeaks
-  distal_enh.bed    BED6 of regions flagged as distal enhancers -> HOMER findMotifsGenome
 
-region_id = <gene_id>|<cell_type>|<chrom>|<start0>|<end0>   (cell_type omitted if absent)
+--tss-bed   one-base TSS BED6, one TSS per gene (TSS_BED in config.sh); column 4 is matched to each
+              region's gene_id (version suffixes ignored on both sides)
+Outputs (in --outdir)
+  annotated.tsv     one row per region: ALL original regions.tsv columns (including the HARI scan's own
+                    `annotation`), then per-track signal / overlap counts, then
+                      dist_to_target_tss, abs_dist_to_target_tss
+                          region midpoint to the gene's TSS, bp; signed in gene orientation
+                          (positive = downstream of the TSS)
+                      tss_class, from the region's edges [a, b) and the TSS position tss0 (0-based start
+                      of the 1-bp BED record):
+                          TSS_proximal  a <= tss0 < b                            region covers the TSS
+                          TSS_boundary  min(|a - tss0|, |b - tss0|) <= half      nearest edge within
+                                                                                 --promoter-half-bp
+                          distal        otherwise
+                      The distance columns and tss_class are empty if the gene has no TSS on the
+                      region's chromosome.
+  all_regions.bed   BED6 of every region (region_id in column 4) -> HOMER annotatePeaks
+  class_<tss_class>.bed
+                    BED6 of the regions in each tss_class (class_TSS_proximal.bed, class_TSS_boundary.bed,
+                    class_distal.bed; written only if non-empty) -> HOMER motif / GO foregrounds
+
+region_id = <gene_id>|<chrom>|<start0>|<end0>
 """
 import argparse
 import sys
@@ -26,7 +40,6 @@ import numpy as np
 import pandas as pd
 import pyBigWig
 import pybedtools
-
 
 
 def log(msg):
@@ -41,7 +54,9 @@ def read_regions(path, gene):
     return df.drop_duplicates("region_id").reset_index(drop=True)
 
 def overlap_counts(region, bedtool):
-    """Number of intervals in `bedtool` overlapping each region (keyed on region_id)."""
+    """
+    Number of intervals in bedtools overlapping each region
+    """
     a = pybedtools.BedTool.from_dataframe(region[["chrom", "start0", "end0", "region_id"]])
     counts = {}
     for interval in a.intersect(bedtool, c=True):
@@ -68,6 +83,49 @@ def bigwig_signal(reg, path, stat):
         log(f"WARNING {path}: chromosomes not in bigwig (chr naming mismatch?): {sorted(missing)[:5]}")
     return vals
 
+def tss_class(a, b, tss0, promoter_half_bp):
+    """
+    Class of the region relative to a the gene TSS
+    """
+    if a <= tss0 < b:                                             
+        return "TSS_proximal"
+    if min(abs(a - tss0), abs(b - tss0)) <= promoter_half_bp:
+        return "TSS_boundary"                                
+    return "distal"
+
+def add_tss_columns(regions, tss_path, promoter_half_bp):
+    """
+    Add dist_to_target_tss, abs_dist_to_target_tss and tss_class columns using each region's own gene's TSS
+    """
+    t = pd.read_csv(tss_path, sep="\t", header=None, comment="#", dtype={0: str, 3: str})
+    by_gene = {g: d for g, d in t.groupby(t[3].str.split(".").str[0])}
+    dist = np.full(len(regions), np.nan)
+    cls = np.full(len(regions), np.nan, dtype=object)
+    genes = regions["gene_id"].str.split(".").str[0]
+    mids = ((regions["start0"] + regions["end0"]) // 2).to_numpy()
+    absent = set()
+    for i, (gene, chrom, a, b, mid) in enumerate(zip(genes, regions["chrom"], regions["start0"],
+                                                      regions["end0"], mids)):
+        g = by_gene.get(gene)
+        if g is None:
+            absent.add(gene)
+            continue
+        cand = g[g[0] == chrom]
+        if cand.empty:
+            continue
+        tss = cand[1].to_numpy()          
+        signed = np.where(cand[5].to_numpy() == "-", tss - mid, mid - tss)
+        dist[i] = signed[np.argmin(np.abs(signed))]
+        # if a gene has several TSS records, classify against the one closest to the region's edges
+        edge = np.where((a <= tss) & (tss < b), 0, np.minimum(np.abs(a - tss), np.abs(b - tss)))
+        cls[i] = tss_class(int(a), int(b), int(tss[np.argmin(edge)]), promoter_half_bp)
+    if absent:
+        log(f"WARNING: {sorted(absent)[:5]} not found in column 4 of {tss_path} (needs the Ensembl gene_id); "
+            "their distance and tss_class are empty")
+    regions["dist_to_target_tss"] = dist
+    regions["abs_dist_to_target_tss"] = np.abs(dist)
+    regions["tss_class"] = cls
+
 def write_bed6(df, path):
     out = df[["chrom", "start0", "end0", "gene_id", "mean_signed_effect", "gene_strand"]].copy()
     out.to_csv(path, sep="\t", header=False, index=False)
@@ -83,22 +141,10 @@ def main():
     p.add_argument("--regions", required=True)
     p.add_argument("--tracks", required=True)
     p.add_argument("--outdir", required=True)
-    p.add_argument("--chrom-sizes", required=True, help="hg38 chrom.sizes (for padding the TSS mask)")
-    p.add_argument("--tss-pad", type=int, default=5000)
-    p.add_argument("--enh-assays", default="h3k27ac,atac",
-                   help="comma-separated assays whose BED peaks define an enhancer (case-insensitive; "
-                        "any manifest role, including 'mask')")
-    p.add_argument("--enh-celltypes", default="",
-                   help="comma-separated manifest celltypes allowed to contribute enhancer peaks "
-                        "(case-insensitive; empty = any), e.g. 'astrocyte'")
-    p.add_argument("--mask-assays", default="tss",
-                   help="comma-separated assays of the BED rows padded by --tss-pad into the promoter mask "
-                        "(case-insensitive). Only these BEDs form the mask, NOT every role=mask row: "
-                        "role=mask is also used in tracks.tsv to hide peak BEDs from plots/enrichment sets")
-    p.add_argument("--distal-mode", default="enhancer", choices=["enhancer", "hari"],
-                   help="how is_distal_enh (and distal_enh.bed for HOMER) is defined. enhancer: enhancer peak "
-                        "and outside the TSS mask. hari: the HARI scan's own `annotation` column == 'distal' "
-                        "(no overlap with the target gene's TSS +/- promoter_half_bp; no enhancer evidence)")
+    p.add_argument("--tss-bed", required=True)
+    p.add_argument("--promoter-half-bp", type=int, default=5000,
+                   help="tss_class: TSS_boundary if the nearest region edge is within this many bp of the TSS "
+                        "(keep equal to the HARI scan's --promoter-half-bp)")
     p.add_argument("--bw-stat", default="mean", choices=["mean", "max", "min"])
     args = p.parse_args()
 
@@ -109,62 +155,23 @@ def main():
     log(f"{args.gene}: {len(regions)} regions")
 
     tracks_tsv = pd.read_csv(args.tracks, sep=r"\s+", dtype=str).fillna("")
-
-    def split_set(s):
-        return {x.strip().lower() for x in s.split(",") if x.strip()}
-
-    enh_assays = split_set(args.enh_assays)
-    enh_celltypes = split_set(args.enh_celltypes)
-    mask_assays = split_set(args.mask_assays)
-    mask_total = np.zeros(len(regions), dtype=int)
-    enh_cols = []
-
     for _, t in tracks_tsv.iterrows():
-        assay, celltype = t["assay"].strip().lower(), t["celltype"].strip().lower()
         if t["type"] == "bigwig":
             add_track_column(regions, t["name"], bigwig_signal(regions, t["path"], args.bw_stat))
         elif t["type"] == "bed":
-            if assay in mask_assays:
-                # promoter mask: TSS BED padded by --tss-pad
-                bt = pybedtools.BedTool(t["path"]).slop(b=args.tss_pad, g=args.chrom_sizes)
-                mask_total += overlap_counts(regions, bt).to_numpy()
-            else:
-                # every other BED (any role) becomes a peak-count column; enhancer-assay peaks from an
-                # allowed cell type also count as an enhancer call
-                add_track_column(regions, t["name"], overlap_counts(regions, pybedtools.BedTool(t["path"])))
-                if assay in enh_assays and (not enh_celltypes or celltype in enh_celltypes):
-                    enh_cols.append(t["name"])
+            add_track_column(regions, t["name"], overlap_counts(regions, pybedtools.BedTool(t["path"])))
 
-    if not enh_cols:
-        log(f"WARNING {args.gene}: no BED rows match --enh-assays {sorted(enh_assays)} "
-            f"/ --enh-celltypes {sorted(enh_celltypes) or 'any'}; no region can be a distal enhancer")
-    if not mask_assays & {a.strip().lower() for a in tracks_tsv.loc[tracks_tsv['type'] == 'bed', 'assay']}:
-        log(f"WARNING {args.gene}: no BED rows match --mask-assays {sorted(mask_assays)}; "
-            "promoter mask is empty")
-
-    regions["in_promoter_mask"] = mask_total > 0
-    regions["has_enh_call"] = (regions[enh_cols].sum(axis=1) > 0) if enh_cols else False
-    if args.distal_mode == "hari":
-        if "annotation" not in regions.columns:
-            sys.exit("[annotate] --distal-mode hari needs an `annotation` column in regions.tsv")
-        distal = regions["annotation"] == "distal"
-    else:
-        distal = (~regions["in_promoter_mask"]) & regions["has_enh_call"]
-    regions["is_distal_enh"] = distal
+    add_tss_columns(regions, args.tss_bed, args.promoter_half_bp)
 
     regions.to_csv(out / "annotated.tsv", sep="\t", index=False)
     write_bed6(regions, out / "all_regions.bed")
-    write_bed6(regions[regions["is_distal_enh"]], out / "distal_enh.bed")
-    # one BED per HARI annotation class (TSS_proximal / TSS_boundary / distal) -> optional HOMER foregrounds
-    # (HOMER_FOREGROUNDS in config.sh); stale files from a previous run are removed first
+    # one BED per TSS annotation class (TSS_proximal / TSS_boundary / distal)
+    # (HOMER_FOREGROUNDS in config.sh)
     for old in out.glob("class_*.bed"):
         old.unlink()
-    if "annotation" in regions.columns:
-        for cls, sub in regions.groupby("annotation"):
-            write_bed6(sub, out / f"class_{cls}.bed")
-    log(f"{args.gene}: {int(regions.is_distal_enh.sum())} distal enhancer regions "
-        f"({int(regions.has_enh_call.sum())} with an enhancer peak, "
-        f"{int(regions.in_promoter_mask.sum())} in promoter mask, of {len(regions)})")
+    for cls, sub in regions.groupby("tss_class"):
+        write_bed6(sub, out / f"class_{cls}.bed")
+    log(f"{args.gene}: {len(regions)} regions; tss_class {regions['tss_class'].value_counts().to_dict()}")
 
 if __name__ == "__main__":
     main()

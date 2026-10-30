@@ -4,13 +4,12 @@
 # export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_stride250_full"
 # path to all 1000 ish gene list output
 
-export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
-# export PERTURB_ROOT_SCAN="/home/dh2226/perturb_enrich/nativeAG/native_astrocyte_pilot"
+# export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/AlphaGenome_ALL_Multicell/RevisedAlphaGenomeModel/PerturbedRegions_1mb_window5000_stride1000_full"
+export PERTURB_ROOT_SCAN="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
 export TRACKS_MANIFEST="/home/dh2226/perturb_enrich/annotations/tracks.tsv"
-export CHROM_SIZES="/home/dh2226/hg38.chrom.sizes"
 
 # outputs
-export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/epilepsy_annot"
+export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive/annot_enrich"
 # export OUT_ROOT="/nfs/roberts/pi/pi_cs3222/dh2226/AGnaive"
 
 # genome
@@ -25,8 +24,9 @@ export PREPARSED_DIR="${OUT_ROOT}/preparsed"
 # resources
 export THREADS=8
 
-export TSS_TARGET_BED="/home/dh2226/perturb_enrich/gene_list/tss_one_base.bed" 
-export GENE_TRACK="/home/dh2226/gencode.v38.annotation.gtf.gz" 
+export TSS_BED="/nfs/roberts/pi/pi_cs3222/Borzoi_init/FinetunedBorzoiModels/AMP_PD_ALL/GRCh38_TSS.bed"
+export GENE_TRACK="/nfs/roberts/pi/pi_cs3222/fq37/ARCHIVE_Alpha_pre/scData_v/Statistics/gencode.v50.annotation.gtf.gz"
+export PROMOTER_HALF_BP=5000
 
 # concordance / enrichment
 export ENRICH_QVALUE=0.05      # BH q cutoff used to call a bigwig bp "active" (p-value tracks)
@@ -49,10 +49,4 @@ export MASK_ASSAYS="tss"
 # With "hari", drop is_distal_enh from ENRICH_STRATA (it duplicates annotation=distal).
 export DISTAL_MODE="hari"
 
-# HOMER motif / GO foregrounds (space-separated), run per gene by run_homer.sh. Annotation of ALL regions
-# (homer_annot.tsv) always runs and keeps each region's HARI class.
-#   distal_enh -> distal_enh.bed -> motifs/ go/ ;  all -> every perturbed region -> motifs_all/ go_all/
-#   distal | TSS_proximal | TSS_boundary -> that HARI class -> motifs_<class>/ go_<class>/
-# e.g. "all distal TSS_proximal TSS_boundary" for everything plus per-class runs.
-# export HOMER_FOREGROUNDS="distal_enh"
 export HOMER_FOREGROUNDS="all distal TSS_proximal TSS_boundary"

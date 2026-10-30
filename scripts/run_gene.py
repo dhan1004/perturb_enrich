@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Run the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> plot_tracks.py.
+"""
+Runa the per-gene pipeline: annotate_regions.py -> run_homer.sh -> merge_annotations.py -> enrich_gene.py -> plot_tracks.py
 
 usage: python run_gene.py --gene ENSG00000002549 --regions regions.tsv [--config config.sh] [--outdir DIR]
 
@@ -8,6 +9,7 @@ Reads config.sh for TRACKS_MANIFEST, CHROM_SIZES, TSS_TARGET_BED, GENE_TRACK and
 Annotation outputs go to $OUT_ROOT/genes/<gene>/ unless --outdir is given.
 """
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +18,6 @@ HERE = Path(__file__).resolve().parent
 
 
 def load_config(path):
-    """Source a bash config file and return the resulting environment as a dict."""
     res = subprocess.run(["bash", "-c", f'set -a; source "{path}"; env -0'],
                          capture_output=True, check=True)
     return dict(item.split("=", 1) for item in res.stdout.decode().split("\0") if "=" in item)
@@ -34,26 +35,28 @@ def main():
     outdir = Path(args.outdir) if args.outdir else Path(config["OUT_ROOT"]) / "genes" / args.gene
     outdir.mkdir(parents=True, exist_ok=True)
 
+    # step 1: annotate genes with tracks
     print(f"[run_gene] {args.gene}: annotate", flush=True)
     subprocess.run([sys.executable, str(HERE / "annotate_regions.py"),
-                    "--gene", args.gene, "--regions", args.regions, "--outdir", str(outdir),
-                    "--tracks", config["TRACKS_MANIFEST"], "--chrom-sizes", config["CHROM_SIZES"],
-                    "--tss-pad", config.get("TSS_PAD", "5000"),
-                    "--enh-assays", config.get("ENH_ASSAYS", "h3k27ac,atac"),
-                    "--enh-celltypes", config.get("ENH_CELLTYPES", "astrocyte"),
-                    "--mask-assays", config.get("MASK_ASSAYS", "tss"),
-                    "--distal-mode", config.get("DISTAL_MODE", "enhancer")],
+                    "--gene", args.gene, 
+                    "--regions", args.regions, 
+                    "--outdir", str(outdir),
+                    "--tracks", config["TRACKS_MANIFEST"],
+                    "--tss-bed", config["TSS_BED"],
+                    "--promoter-half-bp", config.get("PROMOTER_HALF_BP", "5000")],
                    check=True)
 
+    # step 2: HOMER enrichment
     print(f"[run_gene] {args.gene}: homer", flush=True)
     subprocess.run(["bash", str(HERE / "run_homer.sh"), args.gene, str(outdir)], check=True)
 
+    # step 3: merge annotations
     print(f"[run_gene] {args.gene}: merge", flush=True)
     subprocess.run([sys.executable, str(HERE / "merge_annotations.py"),
-                    "--gene", args.gene, "--outdir", str(outdir),
-                    "--target-tss", config["TSS_TARGET_BED"]],
+                    "--gene", args.gene, "--outdir", str(outdir)],
                    check=True)
 
+    # step 4: enrichment calculations across genes
     print(f"[run_gene] {args.gene}: enrich", flush=True)
     enrich_cmd = [sys.executable, str(HERE / "enrich_gene.py"),
                   "--gene", args.gene, "--regions", args.regions,
@@ -65,7 +68,8 @@ def main():
     if config.get("ENRICH_EXCLUDE_PERTURBED", "0") == "1":
         enrich_cmd.append("--exclude-perturbed")
     subprocess.run(enrich_cmd, check=True)
-                   
+
+    # step 5: plot tracks per gene         
     print(f"[run_gene] {args.gene}: plot", flush=True)
     subprocess.run([sys.executable, str(HERE / "plot_tracks.py"),
                     "--gene", args.gene, "--outdir", str(outdir),

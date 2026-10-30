@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 5 (per gene): binary concordance of perturbed regions with annotation sets, plus the
+"""Stage 4 (per gene): binary concordance of perturbed regions with annotation sets, plus the
 permutation-null overlap counts needed for enrichment. Pooling across genes happens later in
 aggregate_enrich.py (counts are additive, so the pooled result is exact).
 
@@ -59,15 +59,16 @@ def read_regions(path):
               + df["start0"].astype(str) + "|" + df["end0"].astype(str))
     df = df.drop_duplicates("region_id").reset_index(drop=True)
     df["length"] = df["end0"] - df["start0"]
-    # region-length bin, usable as a stratum (--strata ... len_bin) to check that results are not driven
-    # by a few very long regions (coverage totals are bp-weighted)
+    # region-length bin, can be used as additional strata
     df["len_bin"] = pd.cut(df["length"], bins=LEN_BIN_EDGES, labels=LEN_BIN_LABELS,
                            right=False).astype(str)
     return df
 
 
 def read_tested(path):
-    """tested_space.bed (headerless: chrom, start0, end0, gene_id) or a headered TSV."""
+    """
+    tested_space.bed (headerless: chrom, start0, end0, gene_id) or a headered TSV
+    """
     path = Path(path)
     if path.suffix == ".bed":
         df = pd.read_csv(path, sep="\t", header=None, usecols=[0, 1, 2, 3],
@@ -82,7 +83,9 @@ def read_tested(path):
 
 
 def load_active_bigwig(path, territory, chrom_id, thr):
-    """Merged global-coordinate intervals where signal >= thr, restricted to the territory."""
+    """
+    Merged coordinate intervals where signal >= thr
+    """
     if not np.isfinite(thr):
         return np.array([], dtype=np.int64), np.array([], dtype=np.int64)
     bw = pyBigWig.open(path)
@@ -163,17 +166,17 @@ def main():
     regions = read_regions(a.regions)
     tested = read_tested(tested_path)
 
-    # extra columns produced by stage 1 (is_distal_enh etc.) for stratification
+    # extra columns produced by stage 1 for stratification
     ann = out / "annotated.tsv"
     if ann.exists():
         extra = pd.read_csv(ann, sep="\t", dtype={"chrom": str}, usecols=lambda c: c in (
-            "region_id", "in_promoter_mask", "has_enh_call", "is_distal_enh"))
+            "region_id", "tss_class"))
         extra = extra[[c for c in extra.columns if c == "region_id" or c not in regions.columns]]
         regions = regions.merge(extra, on="region_id", how="left")
 
     chrom_id = {c: i for i, c in enumerate(sorted(set(regions.chrom) | set(tested.chrom)))}
 
-    # ---- annotation sets ------------------------------------------------ #
+    # annotation sets
     sets = choose_sources(read_manifest(a.tracks))
     thr_tab = pd.read_csv(a.thresholds, sep="\t", dtype={"path": str})
     thr_by_path = {norm_path(p): t for p, t in zip(thr_tab["path"], thr_tab["threshold"])}
@@ -197,7 +200,7 @@ def main():
     set_names = [s["set"] for s in sets]
     F, S = len(file_names), len(sets)
     set_files = [np.flatnonzero(file_set == k) for k in range(S)]
-    # union of a set's active intervals over its files: coverage is bp covered by ANY file
+    # union of a set's active intervals over its files. coverage is bp covered by ANY file
     set_union = []
     for idx in set_files:
         us = np.concatenate([peaks[j][0] for j in idx]) if len(idx) else np.array([], dtype=np.int64)
@@ -219,14 +222,14 @@ def main():
             Xs[:, k] = X[:, idx].any(axis=1)
         return X, Xs
 
-    # ---- null placement ------------------------------------------------- #
+    # null placement
     keep, sample = build_sampler(regions, tested, chrom_id, a.exclude_perturbed)
     if (~keep).any():
         log(f"{a.gene}: {(~keep).sum()} region(s) cannot be placed in the tested windows; excluded")
     regions = regions[keep].reset_index(drop=True)
     n = len(regions)
 
-    # ---- strata --------------------------------------------------------- #
+    # strata
     strata = {"all": np.ones(n, dtype=bool)}
     for col in a.strata.split():
         if col not in regions.columns:
@@ -245,7 +248,7 @@ def main():
     null_set = np.zeros((P, K, S), dtype=np.int32)
     null_file = np.zeros((P, K, F), dtype=np.int32)
     null_joint = np.zeros((P, K, S, S), dtype=np.int32)
-    # continuous (bp coverage) counterparts; bp totals are exact in int64
+    # continuous (bp coverage) counterparts
     obs_cov = np.zeros((K, S), dtype=np.int64)
     obs_len = np.zeros(K, dtype=np.int64)
     null_cov = np.zeros((P, K, S), dtype=np.int64)
@@ -264,8 +267,7 @@ def main():
         Nf, Ns = binarize(starts, qe_null)
         Nf, Ns = Nf.reshape(P, n, F), Ns.reshape(P, n, S)
         Nc = cover(starts, qe_null).reshape(P, n, S)
-        # per-region empirical test: how often does THIS region's own re-placement (same gene, same
-        # length) cover at least as many active bp as the observed region? (+1 so p >= 1/(P+1))
+        # per-region empirical test for observed against null
         exp_cov = Nc.mean(axis=0)
         p_cov = (1 + (Nc >= Cx[None, :, :]).sum(axis=0)) / (1 + P)
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Step 4 (per gene): build a pyGenomeTracks .ini from the manifest and render OUTDIR/{gene}.tracks.pdf.
+"""Step 5 (per gene): build a pyGenomeTracks .ini from the manifest and render OUTDIR/{gene}.tracks.pdf.
 
 Tracks, top to bottom: perturbation effect (mean_signed_effect from annotated.tsv, red = increase,
 blue = decrease), optional external perturbation track, manifest bigwigs, manifest peak/cCRE BEDs,
@@ -20,12 +20,12 @@ import math
 
 import pandas as pd
 
-# GENCODE transcript tags used to pick the canonical transcript, in order of preference.
+# gencode transcript tags used to pick the canonical transcript
 CANONICAL_TAGS = ("MANE_Select", "Ensembl_canonical")
 
 COLORS = ["#d95f02", "#1b9e77", "#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#a6761d", "#666666"]
 
-# pyGenomeTracks height units per track type, and the blank gap inserted between tracks.
+# pyGenomeTracks height units per track type + blank gap inserted between tracks
 H_EFFECT = 4.5
 H_BIGWIG = 3.5
 H_BED = 1.2
@@ -46,7 +46,9 @@ def window(all_regions_bed, flank):
     return chroms[0], max(0, int(r[1].min()) - flank), int(r[2].max()) + flank
 
 def nice_step(span, target_ticks=8):
-    """Round tick spacing (1/2/5 x 10^k bp) giving roughly target_ticks across the window."""
+    """
+    round tick spacing so it looks nice to have target_ticks # of ticks across window
+    """
     raw = span / target_ticks
     mag = 10 ** math.floor(math.log10(raw))
     for m in (1, 2, 5, 10):
@@ -55,10 +57,12 @@ def nice_step(span, target_ticks=8):
 
 
 def write_ruler(chrom, start, end, step, ruler_bed, vlines_bed):
-    """Ticks at every multiple of `step`, labelled with the full coordinate (e.g. 12,345,000)."""
-    first = -(-start // step) * step  # ceil to a multiple of step
+    """
+    ticks at every multiple of `step`, labelled with the full coordinate
+    """
+    first = -(-start // step) * step 
     ticks = list(range(first, end + 1, step))
-    pad = max(1, (end - start) // 1500)  # widen the 1-bp tick so it is visible
+    pad = max(1, (end - start) // 1500) 
     with open(ruler_bed, "w") as f:
         for t in ticks:
             f.write(f"{chrom}\t{max(0, t - pad)}\t{t + pad}\t{t:,}\t0\t.\n")
@@ -69,10 +73,10 @@ def write_ruler(chrom, start, end, step, ruler_bed, vlines_bed):
 
 
 def write_effect_bedgraph(annotated_tsv, path):
-    """Per-region signed effect as a bedgraph; returns the effect units label (or '')."""
+    """
+    per-region signed effect as a bedgraph
+    """
     df = pd.read_csv(annotated_tsv, sep="\t", dtype={"chrom": str})
-    if "mean_signed_effect" not in df.columns:
-        return None
     bg = df[["chrom", "start0", "end0", "mean_signed_effect"]].sort_values(["chrom", "start0"])
     bg.to_csv(path, sep="\t", header=False, index=False)
     units = ""
@@ -82,9 +86,8 @@ def write_effect_bedgraph(annotated_tsv, path):
 
 
 def gene_symbol(gene_track, gene):
-    """gene_name for `gene` (Ensembl ID, version ignored; a symbol also matches) from a GENCODE GTF.
-
-    Returns '' if the track is not a GTF or the gene is not in it. Stops at the first hit.
+    """
+    gene_name for `gene` (Ensembl ID, version ignored). stops at the first hit
     """
     gtf = str(gene_track)
     if not gtf.endswith((".gtf", ".gtf.gz")):
@@ -106,13 +109,8 @@ def gene_symbol(gene_track, gene):
 
 
 def write_canonical_gtf(gtf, chrom, start, end, out_path):
-    """Write a small GTF of the window with one canonical transcript per gene.
-
-    Keeps every `gene` line plus, for each gene, only the transcript(s) tagged MANE_Select; genes with
-    no MANE_Select transcript fall back to Ensembl_canonical, and genes with neither keep all their
-    transcripts (counted in the return value so the caller can warn). Streams the whole GTF once.
-
-    Returns (n_genes, n_fallback_all_transcripts).
+    """
+    write a  GTF of the window with one canonical transcript per gene. returns (n_genes, n_fallback_all_transcripts)
     """
     opener = gzip.open if str(gtf).endswith(".gz") else open
     lines = []  # (gene_id, transcript_id or None, raw line) for features overlapping the window
@@ -153,10 +151,8 @@ def write_canonical_gtf(gtf, chrom, start, end, out_path):
 
 
 def write_tss_beds(tss_path, gene, chrom, start, end, all_bed, target_bed):
-    """Write the in-window TSS (all genes, and the target gene) as BED6 for plotting.
-
-    Each 1-bp TSS is widened to ~1/750 of the window per side so it is visible as a tick at
-    plot scale. Returns (n_tss_in_window, target_found).
+    """
+    write the in-window TSS (all genes, and the target gene) as BED6 for plotting. returns (n_tss_in_window, target_found)
     """
     t = pd.read_csv(tss_path, sep="\t", header=None, comment="#", dtype={0: str}, usecols=[0, 1, 2, 3])
     t = t[(t[0] == chrom) & (t[2] > start) & (t[1] < end)].copy()
@@ -173,7 +169,9 @@ def write_tss_beds(tss_path, gene, chrom, start, end, all_bed, target_bed):
 
 
 def bed_block(name, path, color, title=None):
-    """A collapsed BED track with no per-feature labels."""
+    """
+    a collapsed BED track with no per-feature labels
+    """
     return (f"[{name}]\nfile = {path}\ntitle = {title or name}\n"
             f"display = collapsed\nlabels = false\nheight = {H_BED}\ncolor = {color}\n")
 
@@ -196,7 +194,7 @@ def main():
     a = p.parse_args()
 
     out = Path(a.outdir)
-    all_bed, distal_bed = out / "all_regions.bed", out / "distal_enh.bed"
+    all_bed = out / "all_regions.bed"
     chrom, start, end = window(all_bed, a.flank)
 
     symbol = a.gene_symbol or gene_symbol(a.gene_track, a.gene)
@@ -205,7 +203,6 @@ def main():
             f"(pass --gene-symbol, or a GTF as --gene-track)")
     label = f"{symbol} ({a.gene})" if symbol and symbol != a.gene else a.gene
 
-    # Gene models: for a GTF, subset the window to the canonical transcript of each gene.
     gene_file = a.gene_track
     if a.gene_track.endswith((".gtf", ".gtf.gz")) and not a.all_transcripts:
         gene_file = str(out / f"{a.gene}.canonical.gtf")
@@ -221,8 +218,6 @@ def main():
     if "role" not in man_all.columns:
         man_all["role"] = ""
     man = man_all
-    # if a.celltype and "celltype" in man.columns:
-    #     man = man[man["celltype"].isin([a.celltype, "all", ""])]
 
     blocks, i = [], 0
 
@@ -254,26 +249,6 @@ def main():
     if a.show_peaks:
         for _, t in man[(man["type"] == "bed") & (man["role"] != "mask")].iterrows():
             blocks.append(bed_block(t["name"], t["path"], color()))
-        
-    # blocks.append(bed_block("perturbed regions", all_bed, "#999999"))
-    blocks.append(bed_block("distal enhancers", distal_bed, "#000000"))
-
-    # TSS: the manifest's TSS BED is role=mask (used to exclude promoters in annotate_regions.py), so
-    # it is skipped by the generic BED loop above. Plot it explicitly. Not cell-type specific, hence man_all.
-    # tss = man_all[(man_all["type"] == "bed") & (man_all["assay"] == "tss")]
-    # if tss.empty:
-    #     log("no assay=tss BED in the manifest; skipping TSS tracks")
-    # else:
-    #     tss_all, tss_target = out / f"{a.gene}.tss.bed", out / f"{a.gene}.target_tss.bed"
-    #     n, found = write_tss_beds(tss.iloc[0]["path"], a.gene, chrom, start, end, tss_all, tss_target)
-    #     if n:
-    #         blocks.append(bed_block("TSS", tss_all, "#555555", "TSS (all genes)"))
-    #     else:
-    #         log(f"no TSS in {chrom}:{start}-{end}; skipping TSS track")
-    #     if found:
-    #         blocks.append(bed_block("target TSS", tss_target, "#d62728", f"{symbol or a.gene} TSS"))
-    #     else:
-    #         log(f"WARNING: {a.gene} not found in {tss.iloc[0]['path']} (column 4 must be the Ensembl gene_id)")
 
     genes = f"[genes]\nfile = {gene_file}\ntitle = GENCODE\nheight = {H_GENES}\nfontsize = 8\n"
     if str(gene_file).endswith((".gtf", ".gtf.gz")):
@@ -297,7 +272,6 @@ def main():
            "--outFileName", str(pdf), "--title", f"{label}  {chrom}:{start:,}-{end:,}"]
     log(" ".join(cmd))
     subprocess.run(cmd, check=True)
-
 
 if __name__ == "__main__":
     main()
